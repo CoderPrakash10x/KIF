@@ -9,7 +9,7 @@ import useFields from '../../hooks/useFields';
 import useQueryParam from '../../hooks/useQueryParam';
 import useSubmit from '../../hooks/useSubmit';
 import PageHeader from '../../components/common/PageHeader';
-import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/Feedback';
+import { EmptyState, ErrorState } from '../../components/common/Feedback';
 import Button, { IconButton } from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Dropdown from '../../components/ui/Dropdown';
@@ -81,7 +81,7 @@ function HistoryModal({ item, onClose }) {
   const rows = hist.data?.data || [];
   return (
     <Modal open onClose={onClose} title={`History · ${item.itemName}`} description={`Current stock: ${item.currentQuantity} ${item.unit}`} footer={<Button onClick={onClose}>Close</Button>}>
-      {hist.loading && !hist.data ? <ListSkeleton rows={3} /> : !rows.length ? <EmptyState compact title="No movements yet" /> : (
+      {hist.loading && !hist.data ? <p className="muted">Loading…</p> : !rows.length ? <EmptyState compact title="No movements yet" /> : (
         <ul className="rows rows--timeline">{rows.map(h => (
           <li key={h._id} className="row"><span className="timeline-dot" data-tone={h.type === 'STOCK_OUT' ? 'amber' : 'primary'} aria-hidden="true" />
             <div className="row__main"><p className="row__title">{titleCase(h.type)}: {h.type === 'STOCK_OUT' ? '−' : '+'}{h.quantity} {item.unit}</p><p className="row__sub">{h.reason} · {h.performedBy?.name || '—'} · balance {h.newQuantity}</p></div>

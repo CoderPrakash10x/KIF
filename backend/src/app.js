@@ -7,17 +7,12 @@ const sanitizeModule = require('@exortek/express-mongo-sanitize');
 const mongoSanitize = sanitizeModule.default || sanitizeModule.expressMongoSanitize || sanitizeModule;
 const env = require('./config/env');
 const { generalApiLimiter } = require('./middleware/rateLimiter');
-const compression = require('compression');
 const { errorHandler } = require('./middleware/errorHandler');
-const { requestLogger } = require('./middleware/requestLogger');
 
 const app = express();
 // Behind Render/Vercel/nginx the client IP and HTTPS come from the proxy (needed for rate limiting + secure cookies).
 if (env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
-app.disable('x-powered-by');
-app.use(requestLogger);
-app.use(compression());
 app.use(helmet());
 const allowedOrigins = env.FRONTEND_URL.split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({
@@ -29,11 +24,7 @@ app.use(cookieParser());
 app.use(mongoSanitize());
 app.use(generalApiLimiter);
 
-app.get('/api/v1/health', (req, res) => res.json({ success: true, status: 'ok', timestamp: new Date() })); // liveness
-app.get('/api/v1/ready', (req, res) => { // readiness: only route traffic when MongoDB is connected
-  const up = require('mongoose').connection.readyState === 1;
-  res.status(up ? 200 : 503).json({ success: up, status: up ? 'ready' : 'db_unavailable' });
-});
+app.get('/api/v1/health', (req, res) => res.json({ success: true, status: 'ok', timestamp: new Date() }));
 
 app.use('/api/v1/auth', require('./routes/auth.routes'));
 app.use('/api/v1/users', require('./routes/user.routes'));

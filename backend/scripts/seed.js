@@ -23,14 +23,13 @@ const day = (n) => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); d.setUTCDa
 async function upsertUser({ name, email, role, password, department, startupName, contact }) {
   let user = await User.findOne({ email });
   if (user) return { user, created: false };
-  user = new User({ name, email, role, department, startupName, contact, status: 'ACTIVE', emailVerified: true });
+  user = new User({ name, email, role, department, startupName, contact, status: 'ACTIVE', emailVerified: true, approvalStatus: 'APPROVED' });
   user.password = password;
   await user.save();
   return { user, created: true };
 }
 
 async function main() {
-  if (isProd && (/^(Admin@12345|Demo@12345)$/.test(adminPassword || '') || (adminPassword || '').length < 12)) throw new Error('Refusing to seed production with a default or weak (<12 chars) admin password');
   if (!process.env.MONGO_URI) throw new Error('MONGO_URI is not set');
   if (!adminEmail || !adminPassword) throw new Error('Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD (required in production)');
   await mongoose.connect(process.env.MONGO_URI);
@@ -77,12 +76,22 @@ async function main() {
       })));
       console.log('Created 10 hardware items');
     }
-    if (!(await Room.countDocuments())) {
-      await Room.insertMany([
+    {
+      // Idempotent: never duplicates a room and never overwrites an existing one or its assignment.
+      const wanted = [
         { roomName: 'AI / Neural Lab', type: 'AI_NEURAL_LAB', capacity: 12, location: 'First floor, East wing', equipmentList: [{ name: 'GPU workstation' }, { name: '4K display' }, { name: 'Projector' }] },
         { roomName: 'Podcast Room', type: 'PODCAST_ROOM', capacity: 4, location: 'Ground floor, Media corner', equipmentList: [{ name: 'Shure SM7B microphones' }, { name: 'Audio interface' }, { name: 'Camera' }] },
-      ]);
-      console.log('Created 2 rooms');
+        // New rooms: capacity/location are NOT invented; confirm them in Rooms > Manage room.
+        { roomName: 'Co-working Space', type: 'CO_WORKING_SPACE' },
+        { roomName: 'Conference Room', type: 'CONFERENCE_ROOM' },
+        { roomName: 'Fabrication Lab', type: 'FABRICATION_LAB' },
+        { roomName: '3D Maker Lab', type: 'MAKER_LAB_3D' },
+      ];
+      let added = 0;
+      for (const r of wanted) {
+        if (!(await Room.findOne({ $or: [{ type: r.type }, { roomName: r.roomName }] }))) { await Room.create(r); added += 1; }
+      }
+      console.log(`Rooms: ${added} created, ${wanted.length - added} already present`);
     }
     if (!(await Consumable.countDocuments())) {
       const items = [

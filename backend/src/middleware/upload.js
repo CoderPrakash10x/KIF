@@ -11,7 +11,7 @@ const fileFilter = (req, file, cb) => {
   };
   const allAllowed = Object.values(allowedMimes).flat();
   if (allAllowed.includes(file.mimetype)) return cb(null, true);
-  { const e = new Error(`Unsupported file type: ${file.mimetype}`); e.code = 'UNSUPPORTED_FILE_TYPE'; cb(e, false); }
+  cb(new Error(`Unsupported file type: ${file.mimetype}`), false);
 };
 
 const upload = multer({

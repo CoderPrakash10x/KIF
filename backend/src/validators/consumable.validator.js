@@ -8,7 +8,6 @@ const createConsumableSchema = z.object({
   currentQuantity: z.number().min(0).default(0),
   lowStockThreshold: z.number().min(0),
   location: z.string().max(200).optional(),
-  supplier: z.string().max(150).optional(),
   description: z.string().max(1000).optional(),
   openingReason: z.string().max(500).optional(),
 });
@@ -28,9 +27,3 @@ module.exports = {
   stockMovementSchema,
   stockAdjustmentSchema,
 };
-const updateConsumableSchema = z.object({
-  sku: z.string().max(50).optional(), itemName: z.string().min(1).max(150).optional(), category: z.string().max(100).optional(),
-  unit: z.string().min(1).max(50).optional(), lowStockThreshold: z.number().min(0).optional(),
-  location: z.string().max(200).optional(), supplier: z.string().max(150).optional(), description: z.string().max(1000).optional(),
-});
-module.exports.updateConsumableSchema = updateConsumableSchema;

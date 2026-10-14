@@ -42,8 +42,7 @@ export function MyNoDuesPage() {
   const q = useApi(async () => {
     try { return await api.get('/no-dues/my-status'); } catch (e) { if (e instanceof ApiError && e.status === 404) return { data: null }; throw e; }
   }, []);
-  const raw = q.data?.data;
-  const rec = raw && raw._id ? raw : null; // backend answers 200 {status:'NOT_STARTED'} when nothing exists yet
+  const rec = q.data?.data;
   if (q.loading && !q.data) return <PageSkeleton />;
   if (q.error && !q.data) return <div className="page"><ErrorState onRetry={q.reload} /></div>;
   return (
@@ -93,10 +92,9 @@ export default function NoDuesAdminPage() {
       )}
       {sel && (
         <Modal open onClose={() => setSel(null)} size="lg" title={`No-dues · ${sel.userId?.name}`} dismissible={!busy}
-          footer={<><Button onClick={() => setSel(null)} disabled={busy}>Close</Button><Button variant="danger" disabled={busy || sel.status !== 'IN_REVIEW'} onClick={() => review('REJECT')}>Reject</Button><Button variant="primary" loading={busy} disabled={sel.status !== 'IN_REVIEW'} onClick={() => review('APPROVE')}>Approve &amp; issue certificate</Button></>}>
+          footer={<><Button onClick={() => setSel(null)} disabled={busy}>Close</Button><Button variant="danger" disabled={busy} onClick={() => review('REJECT')}>Reject</Button><Button variant="primary" loading={busy} onClick={() => review('APPROVE')}>Approve &amp; issue certificate</Button></>}>
           <div className="detail-head"><Badge status={sel.overallStatus} /></div>
           <Checks record={sel} />
-          {sel.status !== 'IN_REVIEW' && <p className="notice notice--info">Only requests that have auto-cleared (In review) can be approved or sent back.</p>}
           <Textarea label="Remarks" hint="Optional." value={remarks} onChange={e => setRemarks(e.target.value)} />
         </Modal>
       )}

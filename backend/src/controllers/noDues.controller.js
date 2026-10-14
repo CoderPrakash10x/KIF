@@ -1,4 +1,3 @@
-const { parsePage, parseLimit } = require('../utils/pagination');
 const noDuesService = require('../services/noDues.service');
 
 exports.initiate = async (req, res, next) => {
@@ -32,7 +31,7 @@ exports.adminReview = async (req, res, next) => {
     const noDues = await noDuesService.adminReviewNoDues(req.params.id, req.user, decision, remarks, {
       ip: req.ip, userAgent: req.headers['user-agent'],
     });
-    res.json({ success: true, message: decision === 'APPROVE' ? 'No-Dues request approved' : 'No-Dues request sent back', data: noDues });
+    res.json({ success: true, message: `No-Dues request ${decision.toLowerCase()}d`, data: noDues });
   } catch (err) { next(err); }
 };
 
@@ -46,7 +45,7 @@ exports.myStatus = async (req, res, next) => {
 exports.list = async (req, res, next) => {
   try {
     const { status, page, limit } = req.query;
-    const result = await noDuesService.listNoDuesRequests({ status, page: parsePage(page), limit: parseLimit(limit, 20) });
+    const result = await noDuesService.listNoDuesRequests({ status, page: Number(page) || 1, limit: Number(limit) || 20 });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
 };

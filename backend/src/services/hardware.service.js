@@ -43,22 +43,7 @@ async function updateHardware(hardwareId, updates, adminUser, meta = {}) {
 
   // Prevent direct manipulation of availableQuantity via generic update —
   // it must only ever change through issue/return/inspection flows below.
-  const { availableQuantity: requestedAvailable, ...rest } = updates;
-  const openTxns = await HardwareTransaction.countDocuments({
-    hardwareId: hardware._id,
-    status: { $in: [HARDWARE_TXN_STATUS.APPROVED, HARDWARE_TXN_STATUS.ISSUED, HARDWARE_TXN_STATUS.OVERDUE, HARDWARE_TXN_STATUS.RETURNED] },
-  });
-  if (rest.totalQuantity !== undefined) {
-    const delta = Number(rest.totalQuantity) - hardware.totalQuantity;
-    if (!Number.isInteger(Number(rest.totalQuantity)) || Number(rest.totalQuantity) < 0) throw new ApiError(400, 'totalQuantity must be a non-negative whole number', 'VALIDATION_ERROR');
-    if (hardware.availableQuantity + delta < 0) throw new ApiError(409, 'Cannot reduce total below the units currently issued', 'INVALID_STATE');
-    hardware.availableQuantity += delta; // keeps issued = total - available constant
-  }
-  // Marking an idle item damaged/under repair zeroes availability; only allowed when no unit is out.
-  if (requestedAvailable !== undefined && openTxns === 0 && Number(requestedAvailable) >= 0 && Number(requestedAvailable) <= (rest.totalQuantity ?? hardware.totalQuantity)) {
-    hardware.availableQuantity = Number(requestedAvailable);
-  }
-  updates = rest;
+  delete updates.availableQuantity;
 
   Object.assign(hardware, updates);
   await hardware.save();
@@ -120,7 +105,6 @@ async function getHardwareById(hardwareId) {
 const REQUIRED_CSV_FIELDS = ['itemName', 'category', 'type', 'totalQuantity'];
 
 async function bulkImportHardware(rows, adminUser, meta = {}) {
-  if (Array.isArray(rows) && rows.length > 2000) throw new ApiError(400, 'Import is limited to 2000 rows per file', 'VALIDATION_ERROR');
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new ApiError(400, 'No rows found to import', 'VALIDATION_ERROR');
   }
@@ -156,12 +140,7 @@ async function bulkImportHardware(rows, adminUser, meta = {}) {
       if (doc.assetTag) {
         const existing = await Hardware.findOne({ assetTag: doc.assetTag });
         if (existing) {
-          // Re-imports update catalog data only. Stock counters belong to the issue/return workflow;
-          // blindly resetting availableQuantity would silently 'return' every issued unit.
-          const { availableQuantity, totalQuantity, ...catalog } = doc; // eslint-disable-line no-unused-vars
-          const delta = Number.isFinite(totalQuantity) ? totalQuantity - existing.totalQuantity : 0;
-          Object.assign(existing, catalog);
-          if (delta !== 0) { existing.totalQuantity += delta; existing.availableQuantity = Math.max(0, existing.availableQuantity + delta); }
+          Object.assign(existing, doc);
           await existing.save();
           results.updated++;
           continue;

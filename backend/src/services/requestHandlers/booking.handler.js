@@ -9,10 +9,6 @@ async function validate({ resourceId, startDate, startTime, endTime, session }) 
   if (!startDate || !startTime || !endTime) {
     throw new ApiError(400, 'date, startTime and endTime are required', 'VALIDATION_ERROR');
   }
-  const { slotRules } = require('../../validators/room.validator');
-  const issues = []; slotRules({ startTime, endTime }, { addIssue: (i) => issues.push(i.message) });
-  if (issues.length) throw new ApiError(400, issues[0], 'VALIDATION_ERROR');
-  if (new Date(startDate) < new Date(new Date().toISOString().slice(0, 10))) throw new ApiError(400, 'Date cannot be in the past', 'VALIDATION_ERROR');
   await roomService.checkSlotConflict({ roomId: resourceId, date: startDate, startTime, endTime, session });
 }
 

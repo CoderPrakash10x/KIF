@@ -1,4 +1,3 @@
-import { ListSkeleton } from '../../components/common/Feedback';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { api } from '../../lib/api';
@@ -143,7 +142,7 @@ export function DetailModal({ item, onClose }) {
       <h3 className="subhead">QR code</h3>
       <QrCard type="hardware" id={item._id} />
       <h3 className="subhead">Transaction history</h3>
-      {hist.loading ? <ListSkeleton rows={3} /> : (hist.data?.data || []).length ? (
+      {hist.loading ? <p className="muted">Loading…</p> : (hist.data?.data || []).length ? (
         <ul className="rows rows--timeline">{hist.data.data.map(t => (
           <li key={t._id} className="row"><span className="timeline-dot" data-tone="primary" aria-hidden="true" />
             <div className="row__main"><p className="row__title">{titleCase(t.status)} · {t.requestedBy?.name || '—'} ×{t.quantity}</p><p className="row__sub">{t.issueDate ? `Issued ${fmtDate(t.issueDate)}` : 'Not yet issued'}{t.expectedReturnDate ? ` · due ${fmtDate(t.expectedReturnDate)}` : ''}</p></div>
@@ -165,12 +164,7 @@ export function ImportModal({ onClose, onDone }) {
       footer={<><Button onClick={onClose} disabled={busy}>Close</Button><Button variant="primary" loading={busy} disabled={!file} onClick={() => run(null, () => api.upload('/hardware/bulk-import', 'file', file).then(r => { setResult(r.data); onDone(); return r; }))}>Import</Button></>}>
       <div className="stack">
         <Field id={fileId} label="CSV file" hint={file?.name || 'Choose a .csv file.'}><input id={fileId} type="file" accept=".csv,text/csv" className="input" onChange={e => { setFile(e.target.files?.[0] || null); setResult(null); }} /></Field>
-        {result && (
-          <div className="notice notice--info" role="status">
-            <p>Created {result.created ?? 0}, updated {result.updated ?? 0}{result.errors?.length ? `, ${result.errors.length} row(s) failed` : ''}.</p>
-            {result.errors?.length > 0 && <ul className="chips">{result.errors.slice(0, 10).map(m => <li key={m}>{m}</li>)}</ul>}
-          </div>
-        )}
+        {result && <p className="notice notice--info" role="status">{typeof result === 'object' ? JSON.stringify(result.summary || result).slice(0, 300) : String(result)}</p>}
       </div>
     </Modal>
   );

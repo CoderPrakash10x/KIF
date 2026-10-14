@@ -118,8 +118,7 @@ async function createConsumable(
       const [created] = await Consumable.create(
         [
           {
-            sku: payload.sku || undefined,
-            supplier: payload.supplier,
+            sku: payload.sku,
             itemName: payload.itemName,
             category: payload.category,
             unit: payload.unit,
@@ -304,8 +303,6 @@ async function listConsumables({
           $options: 'i',
         },
       },
-      { supplier: { $regex: escapeRegex(search), $options: 'i' } },
-      { category: { $regex: escapeRegex(search), $options: 'i' } },
       {
         description: {
           $regex: escapeRegex(search),
@@ -466,7 +463,11 @@ async function processStockTransaction(
 
       // Reset alert state when stock is restored above threshold.
       // If still low, false allows immediate notification after commit.
-      if (newQuantity > item.lowStockThreshold) item.lowStockAlertSent = false; // re-arm only once restocked (no alert spam)
+      item.lowStockAlertSent =
+        newQuantity >
+        item.lowStockThreshold
+          ? false
+          : false;
 
       await item.save({ session });
 
@@ -584,7 +585,6 @@ async function getStockHistory(
   const query = { consumableId };
 
   if (type) query.type = type;
-  if ((fromDate && Number.isNaN(new Date(fromDate))) || (toDate && Number.isNaN(new Date(toDate)))) throw new ApiError(400, 'Invalid date filter', 'VALIDATION_ERROR');
 
   if (fromDate || toDate) {
     query.createdAt = {};

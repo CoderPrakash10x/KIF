@@ -1,9 +1,4 @@
-const { parsePage, parseLimit } = require('../utils/pagination');
 const cabinService = require('../services/cabin.service');
-
-const isAdmin = (u) => ['ADMIN', 'SUPER_ADMIN'].includes(u.role);
-// Members may see which cabins exist and their state, never who occupies them (names/emails are PII).
-const redact = (cabin) => { const o = cabin.toObject ? cabin.toObject() : { ...cabin }; if (o.currentAllotment) o.currentAllotment = { _id: o.currentAllotment._id || o.currentAllotment }; delete o.maintenanceReason; return o; };
 
 // ---------------------------------------------------------------------------
 // CATALOG
@@ -101,15 +96,14 @@ exports.list = async (req, res, next) => {
       type,
       search,
       active:
-        isAdmin(req.user) && active !== undefined ? active === 'true' : true,
-      page: parsePage(page),
-      limit: parseLimit(limit, 20),
+        active === undefined ? true : active === 'true',
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
     });
 
     res.json({
       success: true,
       ...result,
-      data: isAdmin(req.user) ? result.data : result.data.map(redact),
     });
   } catch (error) {
     next(error);
@@ -124,7 +118,7 @@ exports.getById = async (req, res, next) => {
 
     res.json({
       success: true,
-      data: isAdmin(req.user) ? cabin : redact(cabin),
+      data: cabin,
     });
   } catch (error) {
     next(error);
@@ -271,8 +265,8 @@ exports.getCabinHistory = async (
         req.params.id,
         {
           status,
-          page: parsePage(page),
-          limit: parseLimit(limit, 20),
+          page: Number(page) || 1,
+          limit: Number(limit) || 20,
         }
       );
 
@@ -294,8 +288,8 @@ exports.getMyHistory = async (req, res, next) => {
         req.user._id,
         {
           status,
-          page: parsePage(page),
-          limit: parseLimit(limit, 20),
+          page: Number(page) || 1,
+          limit: Number(limit) || 20,
         }
       );
 

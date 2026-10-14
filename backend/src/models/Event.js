@@ -15,7 +15,7 @@ const eventSchema = new mongoose.Schema(
 
     status: { type: String, enum: Object.values(EVENT_STATUS), default: EVENT_STATUS.DRAFT },
 
-    capacity: { type: Number, default: 0, min: 0 },
+    capacity: { type: Number, default: 0 },
     bannerImage: { url: String, publicId: String },
     certificateEnabled: { type: Boolean, default: false },
 
@@ -28,8 +28,6 @@ const eventSchema = new mongoose.Schema(
     // `reminderSent: false` matched ZERO documents at the MongoDB level
     // (absent field ≠ false) — event reminders were completely dead on arrival.
     reminderSent: { type: Boolean, default: false },
-    regSeq: { type: Number, default: 0, select: false }, // concurrency lock counter for registrations
-
   },
   { timestamps: true }
 );

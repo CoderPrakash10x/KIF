@@ -1,4 +1,3 @@
-const { parsePage, parseLimit } = require('../utils/pagination');
 const service = require('../services/notification.service');
 
 const wrap = (fn) => async (req, res, next) => {
@@ -8,7 +7,7 @@ const wrap = (fn) => async (req, res, next) => {
 exports.list = wrap(async (req, res) => {
   const { read, type, page, limit } = req.query;
   const result = await service.listForUser(req.user._id, {
-    read, type, page: parsePage(page), limit: parseLimit(limit, 20),
+    read, type, page: Number(page) || 1, limit: Math.min(Number(limit) || 20, 100),
   });
   res.json({ success: true, ...result });
 });

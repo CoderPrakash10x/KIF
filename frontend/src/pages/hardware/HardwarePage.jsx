@@ -3,7 +3,7 @@ import { AlertTriangle, Cpu, Download, MoreHorizontal, Pencil, Plus, ScanLine, U
 import { PERMISSIONS as P } from '../../constants/roles';
 import { useCan } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { api, fetchAll } from '../../lib/api';
+import { api } from '../../lib/api';
 import { useApi, useServerList } from '../../hooks/useApi';
 import useDebounce from '../../hooks/useDebounce';
 import useQueryParam from '../../hooks/useQueryParam';
@@ -44,7 +44,7 @@ export default function HardwarePage() {
   const moreTrigger = props => <IconButton icon={MoreHorizontal} label="More actions" {...props} />;
 
   const exportCsv = async () => {
-    const res = { data: await fetchAll('/hardware', { category, search: dq }, 5000) };
+    const res = await api.get('/hardware', { category, search: dq, limit: 1000 });
     downloadCsv('kif-hardware-register.csv', res.data, [
       { header: 'Asset tag', value: r => r.assetTag }, { header: 'Item', value: r => r.itemName }, { header: 'Category', value: r => r.category },
       { header: 'Total', value: r => r.totalQuantity }, { header: 'Available', value: r => r.availableQuantity }, { header: 'Condition', value: r => r.condition }, { header: 'Location', value: r => r.location },

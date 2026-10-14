@@ -18,8 +18,7 @@ const notificationService = require('./notification.service');
 // ROOM CATALOG CRUD (Admin only)
 // ---------------------------------------------------------------------------
 async function createRoom(payload, adminUser, meta = {}) {
-  const { roomName, type, capacity, location, equipmentList } = payload;
-  const room = await Room.create({ roomName, type, capacity, location, equipmentList });
+  const room = await Room.create(payload);
 
   await auditService.log({
     action: 'CREATE_ROOM', performedBy: adminUser._id, role: adminUser.role,
@@ -35,8 +34,7 @@ async function updateRoom(roomId, updates, adminUser, meta = {}) {
   if (!room) throw new ApiError(404, 'Room not found', 'NOT_FOUND');
 
   const oldValue = room.toObject();
-  const { roomName, type, capacity, location, equipmentList } = updates;
-  Object.assign(room, Object.fromEntries(Object.entries({ roomName, type, capacity, location, equipmentList }).filter(([, v]) => v !== undefined)));
+  Object.assign(room, updates);
   await room.save();
 
   await auditService.log({
@@ -94,9 +92,6 @@ async function getRoomById(roomId) {
 // Must always be called inside a DB transaction session for atomicity.
 // ---------------------------------------------------------------------------
 async function checkSlotConflict({ roomId, date, startTime, endTime, excludeRequestId, excludeBookingId, session }) {
-  // Snapshot isolation alone lets two overlapping-but-different slots both commit (write skew).
-  // Writing to the room row makes concurrent checks conflict; the loser retries and sees the winner.
-  if (session) await Room.updateOne({ _id: roomId }, { $inc: { bookingSeq: 1 } }, { session });
   const normalizedDate = normalizeToMidnightUTC(date);
 
   const bookingQuery = {
@@ -146,7 +141,9 @@ async function createDirectBooking(payload, adminUser, meta = {}) {
 
     await checkSlotConflict({ roomId, date, startTime, endTime, session });
 
-    const isImmediate = false; // lifecycle ACTIVE is set by an admin at hand-over; a same-day booking is APPROVED until then
+    const now = new Date();
+    const bookingDateTime = new Date(date);
+    const isImmediate = bookingDateTime <= now;
 
     const [created] = await RoomBooking.create(
       [{
@@ -392,9 +389,10 @@ async function getRoomAvailability(roomId, date) {
   return bookings;
 }
 
-async function listBookings({ roomId, status, fromDate, toDate, page = 1, limit = 20 } = {}) {
+async function listBookings({ roomId, roomIds, status, fromDate, toDate, page = 1, limit = 20 } = {}) {
   const query = {};
   if (roomId) query.roomId = roomId;
+  else if (roomIds) query.roomId = { $in: roomIds }; // admin scope: rooms they manage
   if (status) query.status = status;
   if (fromDate || toDate) {
     query.date = {};
@@ -444,8 +442,6 @@ async function getBookingById(bookingId) {
 
 // Unified schedule for a room: bookings + events held in the room (used by admin and member views).
 async function getRoomSchedule(roomId, fromDate, toDate) {
-  if (!fromDate || Number.isNaN(new Date(fromDate).getTime())) throw new ApiError(400, 'A valid date is required', 'VALIDATION_ERROR');
-  if (toDate && (Number.isNaN(new Date(toDate).getTime()) || new Date(toDate) - new Date(fromDate) > 31 * 864e5)) throw new ApiError(400, 'Date range must be valid and at most 31 days', 'VALIDATION_ERROR');
   const { Event } = require('../models');
   const room = await Room.findById(roomId);
   if (!room) throw new ApiError(404, 'Room not found', 'NOT_FOUND');

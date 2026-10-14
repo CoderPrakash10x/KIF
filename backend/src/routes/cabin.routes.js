@@ -4,8 +4,6 @@ const controller = require('../controllers/cabin.controller');
 const { authenticate } = require('../middleware/auth');
 const { authorize } = require('../middleware/role');
 const { ROLES } = require('../constants/enums');
-const { validate } = require('../middleware/validation');
-const { createCabinSchema, updateCabinSchema, maintenanceSchema, directAllotmentSchema, vacateSchema } = require('../validators/cabin.validator');
 
 const adminOnly = authorize(
   ROLES.ADMIN,
@@ -22,7 +20,6 @@ router.post('/allotments/upload-letter', adminOnly, require('../middleware/uploa
 router.post(
   '/allotments/direct',
   adminOnly,
-  validate(directAllotmentSchema),
   controller.createDirectAllotment
 );
 
@@ -41,13 +38,12 @@ router.post(
 router.post(
   '/allotments/:id/vacate',
   adminOnly,
-  validate(vacateSchema),
   controller.vacate
 );
 
 // Cabin catalog
 router.get('/', controller.list);
-router.post('/', adminOnly, validate(createCabinSchema), controller.create);
+router.post('/', adminOnly, controller.create);
 
 router.get(
   '/:id/history',
@@ -58,7 +54,6 @@ router.get(
 router.post(
   '/:id/maintenance',
   adminOnly,
-  validate(maintenanceSchema),
   controller.markMaintenance
 );
 
@@ -69,7 +64,7 @@ router.post(
 );
 
 router.get('/:id', controller.getById);
-router.patch('/:id', adminOnly, validate(updateCabinSchema), controller.update);
+router.patch('/:id', adminOnly, controller.update);
 router.delete(
   '/:id',
   adminOnly,

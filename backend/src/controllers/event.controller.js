@@ -1,4 +1,3 @@
-const { parsePage, parseLimit } = require('../utils/pagination');
 const eventService = require('../services/event.service');
 
 // ---- Event CRUD (Admin) ----
@@ -69,7 +68,7 @@ exports.list = async (req, res, next) => {
       return res.json({ success: true, data: [], pagination: { page: 1, limit: 0, total: 0, totalPages: 0 } });
     }
     const result = await eventService.listEvents({
-      status, upcoming: upcoming === 'true' || upcoming === true, page: parsePage(page), limit: parseLimit(limit, 20),
+      status, upcoming: upcoming === 'true' || upcoming === true, page: Number(page) || 1, limit: Math.min(Number(limit) || 20, 100),
       visibleStatuses: isAdmin ? undefined : MEMBER_VISIBLE,
     });
     res.json({ success: true, ...result, data: await decorate(result.data, req.user._id) });
@@ -128,7 +127,7 @@ exports.cancelMyRegistration = async (req, res, next) => {
 exports.myRegistrations = async (req, res, next) => {
   try {
     const { status, page, limit } = req.query;
-    const result = await eventService.listMyRegistrations(req.user._id, { status, page: parsePage(page), limit: parseLimit(limit, 20) });
+    const result = await eventService.listMyRegistrations(req.user._id, { status, page: Number(page) || 1, limit: Number(limit) || 20 });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
 };
@@ -136,7 +135,7 @@ exports.myRegistrations = async (req, res, next) => {
 exports.listRegistrations = async (req, res, next) => {
   try {
     const { status, page, limit } = req.query;
-    const result = await eventService.listEventRegistrations(req.params.id, { status, page: parsePage(page), limit: parseLimit(limit, 50) });
+    const result = await eventService.listEventRegistrations(req.params.id, { status, page: Number(page) || 1, limit: Number(limit) || 50 });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
 };

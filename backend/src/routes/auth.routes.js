@@ -2,19 +2,22 @@ const router = require('express').Router();
 const controller = require('../controllers/auth.controller');
 const { authenticate } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
-const { loginLimiter, forgotPasswordLimiter, registerLimiter } = require('../middleware/rateLimiter');
+const { loginLimiter, forgotPasswordLimiter, registerLimiter, otpVerifyLimiter, otpResendLimiter } = require('../middleware/rateLimiter');
+const { registrationSchema, emailOnlySchema, verifyOtpSchema } = require('../utils/registrationRules');
 const {
-  registerSchema, loginSchema, forgotPasswordSchema,
+  loginSchema, forgotPasswordSchema,
   resetPasswordSchema, changePasswordSchema,
 } = require('../validators/auth.validator');
 
-router.post('/register', registerLimiter, validate(registerSchema), controller.register);
-router.post('/verify-email', controller.verifyEmail); // POST only: state changes must not be triggered by link prefetchers
-router.post('/resend-verification', forgotPasswordLimiter, validate(forgotPasswordSchema), controller.resendVerification);
+router.get('/registration-options', controller.registrationOptions);
+router.post('/register', registerLimiter, validate(registrationSchema), controller.register);
+router.post('/verify-otp', otpVerifyLimiter, validate(verifyOtpSchema), controller.verifyOtp);
+router.post('/resend-otp', otpResendLimiter, validate(emailOnlySchema), controller.resendOtp);
+router.get('/verify-email', controller.verifyEmail);
+router.post('/verify-email', controller.verifyEmail);
 
 router.post('/login', loginLimiter, validate(loginSchema), controller.login);
 router.post('/refresh', controller.refresh);
-router.post('/logout', controller.logout); // public: identifies the session from the httpOnly cookie
 
 router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSchema), controller.forgotPassword);
 router.post('/reset-password', validate(resetPasswordSchema), controller.resetPassword);
@@ -22,6 +25,7 @@ router.post('/reset-password', validate(resetPasswordSchema), controller.resetPa
 // Protected
 router.use(authenticate);
 router.get('/me', controller.me);
+router.post('/logout', controller.logout);
 router.post('/logout-all', controller.logoutAllDevices);
 router.post('/change-password', validate(changePasswordSchema), controller.changePassword);
 

@@ -15,8 +15,6 @@ const { authorize } = require(
 const { ROLES } = require(
   '../constants/enums'
 );
-const { validate } = require('../middleware/validation');
-const { createConsumableSchema, updateConsumableSchema, stockMovementSchema, stockAdjustmentSchema } = require('../validators/consumable.validator');
 
 const adminOnly = authorize(
   ROLES.ADMIN,
@@ -33,12 +31,11 @@ router.get('/:id/history', controller.history);
 router.get('/:id', controller.getById);
 
 // Operational changes restricted to Admin.
-router.post('/', adminOnly, validate(createConsumableSchema), controller.create);
+router.post('/', adminOnly, controller.create);
 
 router.patch(
   '/:id',
   adminOnly,
-  validate(updateConsumableSchema),
   controller.update
 );
 
@@ -51,21 +48,18 @@ router.delete(
 router.post(
   '/:id/stock-in',
   adminOnly,
-  validate(stockMovementSchema),
   controller.stockIn
 );
 
 router.post(
   '/:id/stock-out',
   adminOnly,
-  validate(stockMovementSchema),
   controller.stockOut
 );
 
 router.post(
   '/:id/adjust',
   adminOnly,
-  validate(stockAdjustmentSchema),
   controller.adjust
 );
 

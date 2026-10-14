@@ -19,15 +19,15 @@
     "dev": "nodemon src/server.js",
     "seed": "node scripts/seed.js",
     "seed:demo": "node scripts/seed.js --demo",
-    "test": "jest --runInBand",
-    "lint": "eslint src scripts tests --max-warnings 50",
-    "secrets": "node scripts/gen-secrets.js"
+    "migrate": "node scripts/migrate.js",
+    "test": "node --test \"tests/unit/*.test.js\"",
+    "test:integration": "jest --runInBand --testTimeout=60000 tests/integration"
   },
   "dependencies": {
     "@exortek/express-mongo-sanitize": "^1.0.0",
     "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "cloudinary": "^2.5.1",
-    "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "csv-parse": "^7.0.2",
@@ -45,24 +45,15 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "eslint": "^9.39.5",
-    "globals": "^17.13.0",
     "jest": "^30.5.1",
+    "supertest": "^7.2.2",
     "mongodb-memory-server": "^11.2.0",
-    "nodemon": "^3.1.14",
-    "supertest": "^7.2.2"
+    "nodemon": "^3.1.14"
   },
   "jest": {
     "testEnvironment": "node",
-    "setupFiles": [
-      "<rootDir>/tests/setup.js"
-    ],
     "testMatch": [
-      "<rootDir>/tests/**/*.test.js"
-    ],
-    "forceExit": true
-  },
-  "engines": {
-    "node": ">=20"
+      "**/tests/integration/**/*.test.js"
+    ]
   }
 }

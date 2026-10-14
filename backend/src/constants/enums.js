@@ -8,7 +8,9 @@ module.exports = {
   },
 
   USER_STATUS: {
-    PENDING_VERIFICATION: 'PENDING_VERIFICATION',
+    PENDING_VERIFICATION: 'PENDING_VERIFICATION', // registered, e-mail not yet verified
+    PENDING_APPROVAL: 'PENDING_APPROVAL', // e-mail verified, waiting for Super Admin approval
+    REJECTED: 'REJECTED', // registration rejected by Super Admin
     ACTIVE: 'ACTIVE',
     DEACTIVATED: 'DEACTIVATED',
     EXITED: 'EXITED', 
@@ -58,6 +60,17 @@ module.exports = {
   ROOM_TYPE: {
     PODCAST_ROOM: 'PODCAST_ROOM',
     AI_NEURAL_LAB: 'AI_NEURAL_LAB',
+    CO_WORKING_SPACE: 'CO_WORKING_SPACE',
+    CONFERENCE_ROOM: 'CONFERENCE_ROOM',
+    FABRICATION_LAB: 'FABRICATION_LAB',
+    MAKER_LAB_3D: 'MAKER_LAB_3D',
+  },
+
+  // Registration approval is independent of e-mail verification and of account status.
+  APPROVAL_STATUS: {
+    PENDING: 'PENDING',
+    APPROVED: 'APPROVED',
+    REJECTED: 'REJECTED',
   },
 
   BOOKING_STATUS: {

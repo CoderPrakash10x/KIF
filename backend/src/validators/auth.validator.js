@@ -6,42 +6,42 @@ const SELF_SIGNUP_ROLES = [ROLES.FOUNDER, ROLES.INTERN, ROLES.STUDENT];
 
 const registerSchema = z.object({
   name: z.string().min(2).max(100),
-  email: z.string().trim().toLowerCase().email().max(254),
-  password: z.string().min(8, 'Password must be at least 8 characters').max(72, 'Password must be at most 72 characters'),
+  email: z.string().email(),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
   role: z.enum(SELF_SIGNUP_ROLES),
-  contact: z.string().trim().max(30).optional(),
-  department: z.string().trim().max(100).optional(),
-  startupName: z.string().trim().max(150).optional(),
+  contact: z.string().optional(),
+  department: z.string().optional(),
+  startupName: z.string().optional(),
 });
 
 const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
-  password: z.string().min(1).max(200),
+  email: z.string().email(),
+  password: z.string().min(1),
 });
 
 const forgotPasswordSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
+  email: z.string().email(),
 });
 
 const resetPasswordSchema = z.object({
-  token: z.string().min(10).max(200),
-  newPassword: z.string().min(8).max(72),
+  token: z.string().min(10),
+  newPassword: z.string().min(8),
 });
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(8).max(72),
+  newPassword: z.string().min(8),
 });
 
 const updateProfileSchema = z.object({
   name: z.string().min(2).max(100).optional(),
-  contact: z.string().trim().max(30).optional(),
-  department: z.string().trim().max(100).optional(),
-  startupName: z.string().trim().max(150).optional(),
+  contact: z.string().optional(),
+  department: z.string().optional(),
+  startupName: z.string().optional(),
 });
 
 const assignRoleSchema = z.object({
-  userId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid ObjectId'),
+  userId: z.string().min(1),
   role: z.enum(Object.values(ROLES)),
 });
 

@@ -46,7 +46,7 @@ export function BookingModal({ initial, rooms, mode, onClose, onDone }) {
   const validate = () => {
     const e = check(v);
     if (!(Number(v.attendees) >= 1)) e.attendees = 'Enter at least 1 attendee.';
-    else if (Number(v.attendees) > room.capacity) e.attendees = `${room.roomName} holds up to ${room.capacity} people.`;
+    else if (room.capacity && Number(v.attendees) > room.capacity) e.attendees = `${room.roomName} holds up to ${room.capacity} people.`;
     if (v.purpose.trim().length < 3) e.purpose = 'Every booking needs a purpose.';
     return e;
   };
@@ -58,7 +58,7 @@ export function BookingModal({ initial, rooms, mode, onClose, onDone }) {
       footer={<FormFooter formId={formId} onCancel={onClose} busy={busy} submitLabel={mode === 'direct' ? 'Book room' : 'Send request'} />}>
       <form id={formId} noValidate className="form-grid" onSubmit={e => { e.preventDefault(); run(validate, action, { onDone: () => { onDone(); onClose(); } }); }}>
         <SlotFields f={f} errors={errors} rooms={rooms} />
-        <Input label="Attendees" type="number" min="1" step="1" required hint={`Capacity: ${room.capacity}`} {...f.input('attendees')} error={errors.attendees} />
+        <Input label="Attendees" type="number" min="1" step="1" required hint={room.capacity ? `Capacity: ${room.capacity}` : 'Capacity not configured'} {...f.input('attendees')} error={errors.attendees} />
         {mode === 'direct' && <UserPicker label="Booked for" hint="Optional. Defaults to you." value={forUser} onChange={setForUser} />}
         <Textarea label="Purpose" required wrapperClass="span-2" placeholder="What is this session for?" {...f.input('purpose')} error={errors.purpose} />
         {mode === 'request' && room.equipmentList?.length > 0 && (

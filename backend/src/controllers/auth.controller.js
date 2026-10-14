@@ -3,21 +3,41 @@ const { setRefreshTokenCookie, clearRefreshTokenCookie } = require('../utils/coo
 
 exports.register = async (req, res, next) => {
   try {
-    const result = await authService.register(req.body);
-    res.status(201).json({ success: true, message: result.message, data: null });
+    const result = await authService.register(req.body, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    res.status(202).json({
+      success: true,
+      message: result.message,
+      data: result.data,
+    });
+  } catch (err) {
+    console.error('[REGISTER ERROR]', err);
+    next(err);
+  }
+};
+exports.verifyOtp = async (req, res, next) => {
+  try {
+    const result = await authService.verifyOtp(req.body, { ip: req.ip, userAgent: req.headers['user-agent'] });
+    res.json({ success: true, message: result.message, data: result.data });
   } catch (err) { next(err); }
 };
-
+exports.resendOtp = async (req, res, next) => {
+  try {
+    const result = await authService.resendOtp(req.body);
+    res.status(202).json({ success: true, message: result.message, data: result.data });
+  } catch (err) { next(err); }
+};
+exports.registrationOptions = (req, res) => {
+  const { COLLEGES } = require('../constants/colleges');
+  const { SELF_SIGNUP_ROLES } = require('../utils/registrationRules');
+  res.json({ success: true, data: { colleges: COLLEGES, roles: SELF_SIGNUP_ROLES } });
+};
 exports.verifyEmail = async (req, res, next) => {
   try {
-    const result = await authService.verifyEmail(req.body?.token ?? req.query?.token);
-    res.json({ success: true, message: result.message });
-  } catch (err) { next(err); }
-};
-
-exports.resendVerification = async (req, res, next) => {
-  try {
-    const result = await authService.resendVerification(req.body.email);
+    const result = await authService.verifyEmail(req.body.token || req.query.token);
     res.json({ success: true, message: result.message });
   } catch (err) { next(err); }
 };
@@ -57,7 +77,7 @@ exports.refresh = async (req, res, next) => {
 exports.logout = async (req, res, next) => {
   try {
     const rawRefreshToken = req.cookies?.refreshToken;
-    await authService.logout(rawRefreshToken);
+    await authService.logout(req.user._id, rawRefreshToken);
     clearRefreshTokenCookie(res);
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (err) { next(err); }
@@ -88,10 +108,8 @@ exports.resetPassword = async (req, res, next) => {
 exports.changePassword = async (req, res, next) => {
   try {
     const result = await authService.changePassword(
-      req.user._id, req.body.currentPassword, req.body.newPassword,
-      { ip: req.ip, userAgent: req.headers['user-agent'] },
+      req.user._id, req.body.currentPassword, req.body.newPassword
     );
-    setRefreshTokenCookie(res, result.refreshToken);
     res.json({ success: true, message: result.message });
   } catch (err) { next(err); }
 };

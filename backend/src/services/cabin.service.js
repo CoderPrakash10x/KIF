@@ -105,8 +105,12 @@ async function updateCabin(cabinId, updates, adminUser, meta = {}) {
   const oldValue = cabin.toObject();
 
   // Lifecycle fields cannot be changed through generic catalog update.
-  const { name, type, capacity, location, facilities } = updates;
-  Object.assign(cabin, Object.fromEntries(Object.entries({ name, type, capacity, location, facilities }).filter(([, v]) => v !== undefined)));
+  delete updates.status;
+  delete updates.currentAllotment;
+  delete updates.maintenanceReason;
+  delete updates.active;
+
+  Object.assign(cabin, updates);
   await cabin.save();
 
   await auditService.log({

@@ -47,7 +47,7 @@ export default function BookingsPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Bookings" description="Request time in the AI / Neural Lab or the Podcast Room. An admin approves each request."
+      <PageHeader title="Bookings" description="Request time in any KIF room. The room's administrator approves each request."
         actions={<Button variant="primary" icon={Plus} onClick={() => setModal({ roomId: rid, date })} disabled={!rid}>Request a slot</Button>} />
       <QueryBoundary query={rooms}>
         {!room ? <EmptyState title="No rooms available" description="Rooms have not been set up yet." /> : (
@@ -83,7 +83,7 @@ export default function BookingsPage() {
                 <Card title="About this room">
                   <dl className="meta meta--stack">
                     <div><dt><MapPin size={14} aria-hidden="true" /> Location</dt><dd>{room.location || '—'}</dd></div>
-                    <div><dt><UsersIcon size={14} aria-hidden="true" /> Capacity</dt><dd>{room.capacity} people</dd></div>
+                    <div><dt><UsersIcon size={14} aria-hidden="true" /> Capacity</dt><dd>{room.capacity ? `${room.capacity} people` : 'Not configured'}</dd></div>
                     <div><dt><Clock size={14} aria-hidden="true" /> Hours</dt><dd>{fmtTimeRange(OPEN, CLOSE)}</dd></div>
                   </dl>
                   <ul className="chips">{(room.equipmentList || []).map(e => <li key={e.name}>{e.name}</li>)}</ul>

@@ -1,4 +1,3 @@
-const { parsePage, parseLimit } = require('../utils/pagination');
 const service = require('../services/auditQuery.service');
 const auditService = require('../services/audit.service');
 
@@ -12,7 +11,7 @@ const filtersOf = (q) => ({
 // Audit data is strictly read-only here: there is intentionally no update/delete handler.
 exports.list = wrap(async (req, res) => {
   const result = await service.list(req.user, filtersOf(req.query), {
-    page: parsePage(req.query.page), limit: parseLimit(req.query.limit, 20),
+    page: Number(req.query.page) || 1, limit: Math.min(Number(req.query.limit) || 20, 100),
   });
   res.json({ success: true, ...result });
 });

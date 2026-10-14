@@ -1,5 +1,3 @@
-const ApiError = require('../utils/ApiError');
-const { parsePage, parseLimit } = require('../utils/pagination');
 const userService = require('../services/user.service');
 
 // ---- Self-service ----
@@ -19,7 +17,7 @@ exports.updateMyProfile = async (req, res, next) => {
 
 exports.updateMyPhoto = async (req, res, next) => {
   try {
-    if (!req.file) throw new ApiError(400, 'Photo file is required', 'VALIDATION_ERROR');
+    if (!req.file) throw { statusCode: 400, message: 'Photo file is required', code: 'VALIDATION_ERROR' };
     const user = await userService.updateProfilePhoto(req.user._id, req.file.buffer);
     res.json({ success: true, message: 'Profile photo updated', data: user });
   } catch (err) { next(err); }
@@ -28,9 +26,9 @@ exports.updateMyPhoto = async (req, res, next) => {
 // ---- Admin management ----
 exports.list = async (req, res, next) => {
   try {
-    const { role, status, search, page, limit } = req.query;
+    const { role, status, search, approvalStatus, emailVerified, page, limit } = req.query;
     const result = await userService.listUsers({
-      role, status, search, page: parsePage(page), limit: parseLimit(limit, 20),
+      role, status, search, approvalStatus, emailVerified, page: Number(page) || 1, limit: Math.min(Number(limit) || 20, 100),
     });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
@@ -52,6 +50,16 @@ exports.assignRole = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const reviewHandler = (decision) => async (req, res, next) => {
+  try {
+    const user = await userService.reviewRegistration(req.params.id, decision, req.user, { role: req.body?.role, remarks: req.body?.remarks }, {
+      ip: req.ip, userAgent: req.headers['user-agent'],
+    });
+    res.json({ success: true, message: decision === 'APPROVE' ? 'Registration approved' : 'Registration rejected', data: user });
+  } catch (err) { next(err); }
+};
+exports.approveRegistration = reviewHandler('APPROVE');
+exports.rejectRegistration = reviewHandler('REJECT');
 exports.setStatus = async (req, res, next) => {
   try {
     const user = await userService.setUserStatus(req.params.id, req.body.status, req.user, {

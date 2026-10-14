@@ -37,7 +37,7 @@ export default function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const wide = useMediaQuery('(min-width: 961px)');
-  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; } });
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1');
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
@@ -53,11 +53,11 @@ export default function AppShell() {
   }, []);
 
   const toggleNav = useCallback(() => {
-    if (wide) setCollapsed(c => { try { localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1'); } catch { /* storage blocked: preference just isn't remembered */ } return !c; });
+    if (wide) setCollapsed(c => { localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1'); return !c; });
     else setDrawer(o => !o);
   }, [wide]);
 
-  const signOut = async () => { setConfirmOut(false); await logout(); navigate('/login', { replace: true }); };
+  const signOut = async () => { setConfirmOut(false); navigate('/login', { replace: true }); await logout(); };
 
   return (
     <div className={`shell ${collapsed && wide ? 'is-collapsed' : ''}`}>

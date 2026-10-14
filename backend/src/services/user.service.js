@@ -1,6 +1,7 @@
 const { escapeRegex } = require('../utils/regex');
 const { User } = require('../models');
-const { ROLES, USER_STATUS } = require('../constants/enums');
+const { ROLES, USER_STATUS, NOTIFICATION_TYPE } = require('../constants/enums');
+const notificationService = require('./notification.service');
 const ApiError = require('../utils/ApiError');
 const auditService = require('./audit.service');
 const cloudinary = require('../config/cloudinary');
@@ -35,6 +36,11 @@ async function updateProfilePhoto(userId, fileBuffer) {
   const user = await User.findById(userId);
   if (!user) throw new ApiError(404, 'User not found', 'NOT_FOUND');
 
+  // Clean up old photo from Cloudinary if one exists
+  if (user.profilePhoto?.publicId) {
+    await cloudinary.uploader.destroy(user.profilePhoto.publicId).catch(() => {});
+  }
+
   const uploadResult = await new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       { folder: 'kif-rms/profile-photos', resource_type: 'image' },
@@ -43,11 +49,8 @@ async function updateProfilePhoto(userId, fileBuffer) {
     stream.end(fileBuffer);
   });
 
-  const previousId = user.profilePhoto?.publicId;
   user.profilePhoto = { url: uploadResult.secure_url, publicId: uploadResult.public_id };
   await user.save();
-  // Only remove the old asset after the new one is safely stored.
-  if (previousId) cloudinary.uploader.destroy(previousId).catch(() => {});
 
   return user;
 }
@@ -55,15 +58,17 @@ async function updateProfilePhoto(userId, fileBuffer) {
 // ---------------------------------------------------------------------------
 // ADMIN — USER MANAGEMENT
 // ---------------------------------------------------------------------------
-async function listUsers({ role, status, search, page = 1, limit = 20 }) {
+async function listUsers({ role, status, search, approvalStatus, emailVerified, page = 1, limit = 20 }) {
   const query = {};
   if (role) query.role = role;
   if (status) query.status = status;
+  if (approvalStatus === 'APPROVED') query.approvalStatus = { $in: ['APPROVED', null] }; // legacy users count as approved
+  else if (approvalStatus) query.approvalStatus = approvalStatus;
+  if (emailVerified === 'true' || emailVerified === true) query.emailVerified = true;
+  if (emailVerified === 'false' || emailVerified === false) query.emailVerified = false;
   if (search) {
-    query.$or = [
-      { name: { $regex: escapeRegex(search), $options: 'i' } },
-      { email: { $regex: escapeRegex(search), $options: 'i' } },
-    ];
+    const rx = { $regex: escapeRegex(search), $options: 'i' };
+    query.$or = [{ name: rx }, { email: rx }, { rollNumber: rx }, { department: rx }, { branch: rx }];
   }
 
   const skip = (page - 1) * limit;
@@ -140,10 +145,13 @@ async function setUserStatus(targetUserId, newStatus, actorUser, meta = {}) {
     throw new ApiError(403, 'Only Super Admin can modify Admin/Super Admin accounts', 'FORBIDDEN');
   }
 
+  // Activation must not bypass the registration workflow (verified e-mail + Super Admin approval).
+  if (newStatus === USER_STATUS.ACTIVE && (!targetUser.emailVerified || ['PENDING', 'REJECTED'].includes(targetUser.approvalStatus))) {
+    throw new ApiError(409, 'This registration has not been approved. Use "Approve registration" (Super Admin).', 'APPROVAL_REQUIRED');
+  }
+
   const oldValue = { status: targetUser.status };
   targetUser.status = newStatus;
-  // Admin activation vouches for the account: without this an unverified user stays locked out of login.
-  if (newStatus === USER_STATUS.ACTIVE) targetUser.emailVerified = true;
 
   // Force-logout everywhere when deactivating an account
   if (newStatus === USER_STATUS.DEACTIVATED) {
@@ -162,7 +170,43 @@ async function setUserStatus(targetUserId, newStatus, actorUser, meta = {}) {
   return targetUser;
 }
 
+// ---- Registration review (Super Admin only) ----
+const REVIEWABLE_ROLES = [ROLES.FOUNDER, ROLES.INTERN, ROLES.STUDENT];
+
+async function reviewRegistration(targetUserId, decision, actorUser, { role, remarks } = {}, meta = {}) {
+  if (actorUser.role !== ROLES.SUPER_ADMIN) throw new ApiError(403, 'Only the Super Admin can review registrations', 'FORBIDDEN');
+  if (role && !REVIEWABLE_ROLES.includes(role)) throw new ApiError(400, 'Registrations can only be approved as Founder, Intern or Student', 'VALIDATION_ERROR');
+  const approve = decision === 'APPROVE';
+  const set = approve
+    ? { approvalStatus: 'APPROVED', status: USER_STATUS.ACTIVE }
+    : { approvalStatus: 'REJECTED', status: USER_STATUS.REJECTED };
+  Object.assign(set, { approvalReviewedBy: actorUser._id, approvalReviewedAt: new Date(), approvalRemarks: remarks ? String(remarks).slice(0, 300) : undefined });
+  if (approve && role) set.role = role;
+
+  // Atomic: only a verified, still-pending registration can be decided (and only once).
+  const target = await User.findOneAndUpdate(
+    { _id: targetUserId, emailVerified: true, approvalStatus: 'PENDING', role: { $in: REVIEWABLE_ROLES } },
+    { $set: set }, { new: true },
+  );
+  if (!target) {
+    const existing = await User.findById(targetUserId).select('emailVerified approvalStatus role');
+    if (!existing) throw new ApiError(404, 'User not found', 'NOT_FOUND');
+    if (!existing.emailVerified) throw new ApiError(409, 'The applicant has not verified their email yet', 'EMAIL_NOT_VERIFIED');
+    throw new ApiError(409, 'This registration has already been reviewed', 'ALREADY_REVIEWED');
+  }
+  await auditService.log({
+    action: approve ? 'APPROVE_REGISTRATION' : 'REJECT_REGISTRATION', performedBy: actorUser._id, role: actorUser.role,
+    module: 'USER', resourceType: 'User', resourceId: target._id,
+    newValue: { approvalStatus: set.approvalStatus, role: target.role, remarks: set.approvalRemarks }, ipAddress: meta.ip, userAgent: meta.userAgent,
+  });
+  const title = approve ? 'Your account was approved' : 'Your registration was not approved';
+  const message = approve ? 'You can now sign in to KIF-RMS.' : `Your registration was not approved.${set.approvalRemarks ? ` Reason: ${set.approvalRemarks}` : ''}`;
+  await notificationService.notify({ userId: target._id, type: NOTIFICATION_TYPE.GENERAL, title, message, relatedResourceType: 'User', relatedResourceId: target._id });
+  return target;
+}
+
 module.exports = {
+  reviewRegistration,
   getProfile, updateProfile, updateProfilePhoto,
   listUsers, getUserById, assignRole, setUserStatus,
 };

@@ -1,15 +1,15 @@
-const { Event, EventRegistration } = require('../models');
+const { Event, EventRegistration, User } = require('../models');
 const {
   EVENT_STATUS,
   REGISTRATION_STATUS,
   ATTENDANCE_STATUS,
   CERTIFICATE_STATUS,
   NOTIFICATION_TYPE,
-  REQUEST_STATUS,
+  ROLES,
 } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
 const { withTransaction } = require('../utils/db');
-const { rangesOverlap, timeToMinutes } = require('../utils/time');
+const { rangesOverlap } = require('../utils/time');
 const { normalizeToMidnightUTC } = require('../utils/date');
 const auditService = require('./audit.service');
 const notificationService = require('./notification.service');
@@ -56,15 +56,7 @@ async function checkVenueConflict({ venue, date, startTime, endTime, excludeEven
 // ---------------------------------------------------------------------------
 // EVENT CRUD (Admin — direct, per RBAC "Event Creation: Full")
 // ---------------------------------------------------------------------------
-function assertSchedule({ date, startTime, endTime }) {
-  const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
-  if (!hhmm.test(startTime || '') || !hhmm.test(endTime || '')) throw new ApiError(400, 'startTime and endTime must be HH:MM', 'VALIDATION_ERROR');
-  if (timeToMinutes(endTime) <= timeToMinutes(startTime)) throw new ApiError(400, 'endTime must be after startTime', 'VALIDATION_ERROR');
-  if (Number.isNaN(new Date(date).getTime())) throw new ApiError(400, 'A valid date is required', 'VALIDATION_ERROR');
-}
-
 async function createEvent(payload, adminUser, meta = {}) {
-  assertSchedule(payload);
   const { title, description, venue, date, startTime, endTime, capacity, certificateEnabled, publishImmediately } = payload;
 
   const event = await withTransaction(async (session) => {
@@ -74,7 +66,7 @@ async function createEvent(payload, adminUser, meta = {}) {
 
     const [created] = await Event.create(
       [{
-        title, description, venue, date: normalizeToMidnightUTC(date), startTime, endTime,
+        title, description, venue, date, startTime, endTime,
         capacity: capacity || 0,
         certificateEnabled: !!certificateEnabled,
         status: publishImmediately !== false ? EVENT_STATUS.PUBLISHED : EVENT_STATUS.DRAFT,
@@ -122,14 +114,6 @@ async function updateEvent(eventId, updates, adminUser, meta = {}) {
   const event = await Event.findById(eventId);
   if (!event) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
 
-  // Lifecycle/ownership fields are never editable through the generic update.
-  const ALLOWED = ['title', 'description', 'venue', 'date', 'startTime', 'endTime', 'capacity', 'certificateEnabled'];
-  updates = Object.fromEntries(Object.entries(updates || {}).filter(([k]) => ALLOWED.includes(k)));
-  if ([EVENT_STATUS.CANCELLED, EVENT_STATUS.COMPLETED].includes(event.status)) {
-    throw new ApiError(409, `Cannot edit a ${event.status.toLowerCase()} event`, 'INVALID_STATE');
-  }
-  if (updates.date) updates.date = normalizeToMidnightUTC(updates.date);
-  assertSchedule({ date: updates.date || event.date, startTime: updates.startTime || event.startTime, endTime: updates.endTime || event.endTime });
   const oldValue = event.toObject();
 
   // If date/time/venue is changing on a published event, re-verify no new conflict is introduced
@@ -160,9 +144,6 @@ async function cancelEvent(eventId, adminUser, reason, meta = {}) {
   const event = await Event.findById(eventId);
   if (!event) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
 
-  if ([EVENT_STATUS.CANCELLED, EVENT_STATUS.COMPLETED].includes(event.status)) {
-    throw new ApiError(409, `Event is already ${event.status.toLowerCase()}`, 'INVALID_STATE');
-  }
   const oldValue = event.toObject();
   event.status = EVENT_STATUS.CANCELLED;
   await event.save();
@@ -250,8 +231,6 @@ async function registerForEvent(eventId, actorUser, meta = {}) {
       throw new ApiError(409, 'Registration is not open for this event', 'INVALID_STATE');
     }
 
-    // Write-lock the event row: concurrent registrations conflict, one retries and sees the true count.
-    await Event.updateOne({ _id: eventId }, { $inc: { regSeq: 1 } }, { session });
     const existing = await EventRegistration.findOne({ eventId, userId }).session(session);
     if (existing && existing.status !== REGISTRATION_STATUS.CANCELLED) {
       throw new ApiError(409, 'You are already registered for this event', 'ALREADY_REGISTERED');
@@ -312,7 +291,6 @@ async function registerForEvent(eventId, actorUser, meta = {}) {
 async function cancelRegistration(eventId, actorUser, meta = {}) {
   const userId = actorUser._id;
   const { registration, promoted } = await withTransaction(async (session) => {
-    await Event.updateOne({ _id: eventId }, { $inc: { regSeq: 1 } }, { session });
     const reg = await EventRegistration.findOne({ eventId, userId }).session(session);
     if (!reg) throw new ApiError(404, 'Registration not found', 'NOT_FOUND');
     if (reg.status === REGISTRATION_STATUS.CANCELLED) {
@@ -422,7 +400,6 @@ async function markAttendance(registrationId, status, adminUser, meta = {}) {
 
 // Bulk variant — admin submits an array of { registrationId, status } from a checklist UI
 async function bulkMarkAttendance(entries, adminUser, meta = {}) {
-  if (!Array.isArray(entries) || entries.length === 0 || entries.length > 500) throw new ApiError(400, 'entries must be an array of 1-500 items', 'VALIDATION_ERROR');
   const results = { updated: 0, errors: [] };
 
   for (const entry of entries) {

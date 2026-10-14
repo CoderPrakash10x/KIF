@@ -11,22 +11,6 @@ if (missing.length > 0 && process.env.NODE_ENV !== 'test') {
   process.exit(1);
 }
 
-const isProd = process.env.NODE_ENV === 'production';
-if (isProd) {
-  const weak = ['JWT_SECRET', 'JWT_REFRESH_SECRET'].filter((k) => {
-    const v = process.env[k] || '';
-    return v.length < 32 || /change-me|secret|password/i.test(v);
-  });
-  if (weak.length || process.env.JWT_SECRET === process.env.JWT_REFRESH_SECRET) {
-    console.error(`Refusing to start in production: ${weak.join(', ') || 'JWT secrets'} must be distinct random values of >= 32 chars (openssl rand -hex 32).`);
-    process.exit(1);
-  }
-  if (!/^https:\/\//.test((process.env.FRONTEND_URL || '').split(',')[0].trim())) {
-    console.error('Refusing to start in production: FRONTEND_URL must be an https:// origin.');
-    process.exit(1);
-  }
-}
-
 module.exports = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: process.env.PORT || 5001,
@@ -39,13 +23,20 @@ module.exports = {
   REFRESH_TOKEN_EXPIRY_MS: 7 * 24 * 60 * 60 * 1000,
 
   MAX_LOGIN_ATTEMPTS: 5,
+  SMTP_FROM: process.env.SMTP_FROM || undefined,
+  // Registration OTP (see README "Email OTP")
+  OTP_EXPIRY_MINUTES: Number(process.env.OTP_EXPIRY_MINUTES) || 10,
+  OTP_RESEND_COOLDOWN_SECONDS: Number(process.env.OTP_RESEND_COOLDOWN_SECONDS) || 60,
+  OTP_MAX_ATTEMPTS: Number(process.env.OTP_MAX_ATTEMPTS) || 5,
+  OTP_MAX_SENDS_PER_HOUR: Number(process.env.OTP_MAX_SENDS_PER_HOUR) || 5,
+  OTP_SECRET: process.env.OTP_SECRET || process.env.JWT_SECRET,
+  UNVERIFIED_REGISTRATION_TTL_DAYS: Number(process.env.UNVERIFIED_REGISTRATION_TTL_DAYS) || 7,
   LOCK_TIME_MS: 15 * 60 * 1000,
 
   SMTP_HOST: process.env.SMTP_HOST,
   SMTP_PORT: process.env.SMTP_PORT || 587,
   SMTP_USER: process.env.SMTP_USER,
   SMTP_PASSWORD: process.env.SMTP_PASSWORD,
-  SMTP_FROM: process.env.SMTP_FROM,
 
   FRONTEND_URL: process.env.FRONTEND_URL,
   COOKIE_DOMAIN: process.env.COOKIE_DOMAIN || undefined,

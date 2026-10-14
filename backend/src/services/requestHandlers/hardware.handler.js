@@ -2,8 +2,7 @@ const { Hardware, HardwareTransaction } = require('../../models');
 const { HARDWARE_TXN_STATUS, REQUEST_STATUS } = require('../../constants/enums');
 const ApiError = require('../../utils/ApiError');
 
-const getQty = (request) => Number(request.metadata?.quantity) || 1;
-const assertQty = (q) => { if (!Number.isInteger(q) || q < 1 || q > 1000) throw new ApiError(400, 'quantity must be a whole number between 1 and 1000', 'VALIDATION_ERROR'); };
+const getQty = (request) => request.metadata?.quantity || 1;
 
 // Availability is checked but NOT reserved at request time — reserving stock
 // for a request that might get rejected would block other genuine requesters.
@@ -11,9 +10,7 @@ async function validate({ resourceId, metadata, session }) {
   const hardware = await Hardware.findById(resourceId).session(session);
   if (!hardware || !hardware.active) throw new ApiError(404, 'Hardware item not found', 'NOT_FOUND');
 
-  const quantity = metadata?.quantity === undefined ? 1 : Number(metadata.quantity);
-  assertQty(quantity);
-  if (hardware.condition !== 'WORKING') throw new ApiError(409, 'This item is not in working condition', 'ITEM_UNAVAILABLE');
+  const quantity = metadata?.quantity || 1;
   if (hardware.availableQuantity < quantity) {
     throw new ApiError(409, `Only ${hardware.availableQuantity} unit(s) of ${hardware.itemName} available`, 'INSUFFICIENT_STOCK');
   }
@@ -59,8 +56,7 @@ async function onCancel({ request, session }) {
   if (!request.linkedTransactionId) return;
 
   const txn = await HardwareTransaction.findById(request.linkedTransactionId).session(session);
-  if (!txn) return;
-  if (txn.status !== HARDWARE_TXN_STATUS.APPROVED) throw new ApiError(409, 'The item has already been handed over; return it instead of cancelling', 'INVALID_STATE');
+  if (!txn || txn.status !== HARDWARE_TXN_STATUS.APPROVED) return; // already issued physically — can't cancel this way
 
   const hardware = await Hardware.findById(txn.hardwareId).session(session);
   hardware.availableQuantity += txn.quantity;

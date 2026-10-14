@@ -74,7 +74,7 @@ async function processCabinExpiries() {
 
   // Find allotments whose endDate has passed, are still ACTIVE, and not yet processed
   const expiredAllotments = await CabinAllotment.find({
-    status: { $in: [ALLOTMENT_STATUS.ACTIVE, ALLOTMENT_STATUS.APPROVED] }, // reserved-but-never-activated ones must release too
+    status: ALLOTMENT_STATUS.ACTIVE,
     expiryProcessed: false,
     endDate: { $lte: now },
   }).populate('cabinId founderId');

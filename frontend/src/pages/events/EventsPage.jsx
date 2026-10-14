@@ -8,7 +8,7 @@ import useFields from '../../hooks/useFields';
 import useRowAction from '../../hooks/useRowAction';
 import useSubmit from '../../hooks/useSubmit';
 import PageHeader from '../../components/common/PageHeader';
-import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/Feedback';
+import { EmptyState, ErrorState } from '../../components/common/Feedback';
 import Button, { IconButton } from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Dropdown from '../../components/ui/Dropdown';
@@ -69,13 +69,12 @@ function RegistrationsModal({ event, onClose, onChange }) {
   const rowAction = useRowAction();
   const regs = useApi(() => api.get(`/events/${event._id}/registrations`, { status: 'REGISTERED', limit: 100 }), [event._id]);
   const rows = regs.data?.data || [];
-  const totalRegs = regs.data?.pagination?.total ?? rows.length;
   const mark = (id, status) => rowAction.run(id + status, () => api.post(`/events/registrations/${id}/attendance`, { status }), { onDone: regs.reload });
   const certs = () => rowAction.run('certs', () => api.post(`/events/${event._id}/generate-certificates`), { onDone: () => { regs.reload(); onChange(); } });
   return (
-    <Modal open onClose={onClose} size="lg" title={`Registrations · ${event.title}`} description={`${totalRegs} registered${totalRegs > rows.length ? ` (showing first ${rows.length})` : ''} · mark attendance, then generate certificates`}
+    <Modal open onClose={onClose} size="lg" title={`Registrations · ${event.title}`} description={`${rows.length} registered · mark attendance, then generate certificates`}
       footer={<><Button onClick={onClose}>Close</Button>{event.certificateEnabled && <Button variant="primary" icon={Award} loading={rowAction.pending === 'certs'} onClick={certs}>Generate certificates</Button>}</>}>
-      {regs.loading && !regs.data ? <ListSkeleton rows={3} /> : !rows.length ? <EmptyState compact title="No registrations yet" /> : (
+      {regs.loading && !regs.data ? <p className="muted">Loading…</p> : !rows.length ? <EmptyState compact title="No registrations yet" /> : (
         <ul className="rows">{rows.map(r => (
           <li key={r._id} className="row">
             <div className="row__main"><p className="row__title">{r.userId?.name}</p><p className="row__sub">{r.userId?.email}{r.userId?.startupName ? ` · ${r.userId.startupName}` : ''}</p></div>
@@ -112,8 +111,8 @@ export default function EventsPage() {
   // Decide by the row's shape, not the tab: while switching tabs the previous tab's rows are still on screen for a moment.
   const isRegistration = r => !!r && typeof r.eventId === 'object' && r.eventId !== null && !r.title;
   const events = list.rows.map(r => (isRegistration(r) ? { ...r.eventId, registeredCount: undefined, myRegistration: { status: r.status, attendanceStatus: r.attendanceStatus }, certificateUrl: r.certificateUrl } : r)).filter(e => e && e._id && e.date);
-  const rsvp = e => (['REGISTERED', 'WAITLISTED'].includes(e.myRegistration?.status)
-    ? <Button size="sm" icon={Check} loading={rowAction.pending === e._id} onClick={() => rowAction.run(e._id, () => api.post(`/events/${e._id}/cancel-registration`), { onDone: refresh })}>{e.myRegistration.status === 'WAITLISTED' ? 'Waitlisted · leave' : 'Registered'}</Button>
+  const rsvp = e => (e.myRegistration?.status === 'REGISTERED'
+    ? <Button size="sm" icon={Check} loading={rowAction.pending === e._id} onClick={() => rowAction.run(e._id, () => api.post(`/events/${e._id}/cancel-registration`), { onDone: refresh })}>Registered</Button>
     : <Button size="sm" variant="primary" loading={rowAction.pending === e._id} onClick={() => rowAction.run(e._id, () => api.post(`/events/${e._id}/register`), { onDone: refresh })}>Register</Button>);
   const canRsvp = e => e.status === 'PUBLISHED' && tab !== 'past';
   const menu = e => [
@@ -145,7 +144,6 @@ export default function EventsPage() {
                   <dl className="meta">
                     <div><dt><MapPin size={14} aria-hidden="true" /> Venue</dt><dd>{e.venue}</dd></div>
                     {e.registeredCount !== undefined && <div><dt><UsersIcon size={14} aria-hidden="true" /> Registered</dt><dd>{e.registeredCount}{e.capacity ? ` / ${e.capacity}` : ''}</dd></div>}
-                    {e.myRegistration && <div><dt>My registration</dt><dd><Badge status={e.myRegistration.status} /></dd></div>}
                     {tab === 'mine' && <div><dt>Attendance</dt><dd><Badge status={e.myRegistration?.attendanceStatus} /></dd></div>}
                   </dl>
                   {e.description && <p className="res-card__purpose">{e.description}</p>}

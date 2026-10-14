@@ -5,7 +5,7 @@
 //  - refresh token: httpOnly cookie scoped to /api/v1/auth; the browser sends it automatically
 //  - on 401 the client refreshes once (single-flight), retries the original call, and only then
 //    reports an expired session.
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api/v1').replace(/\/$/, '');
 
 const DEFAULT_MESSAGES = {
   0: 'Cannot reach the server. Check your connection and try again.',
@@ -51,27 +51,14 @@ export const getAccessToken = () => accessToken;
 export const setSessionLostHandler = fn => { onSessionLost = fn; };
 
 function buildUrl(path, params) {
-  const url = new URL(`${API_BASE_URL}${path}`, window.location.origin); // works for absolute and same-origin '/api/v1' bases
+  const url = new URL(`${API_BASE_URL}${path}`);
   Object.entries(params || {}).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
   });
   return url.toString();
 }
 
-// In-flight request counter -> drives the thin top progress bar. Background polling is excluded.
-let inflight = 0;
-const busySubs = new Set();
-const bump = n => { inflight += n; busySubs.forEach(f => f()); };
-export const subscribeBusy = f => { busySubs.add(f); return () => busySubs.delete(f); };
-export const getBusy = () => inflight;
-
-async function send(path, opts) {
-  const track = !path.startsWith('/notifications');
-  if (track) bump(1);
-  try { return await sendInner(path, opts); } finally { if (track) bump(-1); }
-}
-
-async function sendInner(path, { method = 'GET', body, params, form, signal, raw } = {}) {
+async function send(path, { method = 'GET', body, params, form, signal, raw } = {}) {
   const headers = {};
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -127,6 +114,7 @@ export const api = {
   get: (path, params, opts) => request(path, { ...opts, params }),
   post: (path, body, opts) => request(path, { ...opts, method: 'POST', body: body ?? {} }),
   patch: (path, body, opts) => request(path, { ...opts, method: 'PATCH', body: body ?? {} }),
+  put: (path, body, opts) => request(path, { ...opts, method: 'PUT', body: body ?? {} }),
   del: (path, opts) => request(path, { ...opts, method: 'DELETE' }),
   upload: (path, field, file) => {
     const form = new FormData();

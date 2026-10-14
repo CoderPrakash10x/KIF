@@ -1,4 +1,4 @@
-const { parsePage, parseLimit } = require('../utils/pagination');
+const roomAccess = require('../services/roomAccess.service');
 const requestService = require('../services/request.service');
 
 exports.create = async (req, res, next) => {
@@ -40,7 +40,8 @@ exports.cancel = async (req, res, next) => {
 exports.list = async (req, res, next) => {
   try {
     const { status, type, search, page, limit } = req.query;
-    const result = await requestService.listRequests({ status, type, search, page: parsePage(page), limit: parseLimit(limit, 20) });
+    const scope = await roomAccess.requestScope(req.user); // ADMIN sees only the rooms they manage
+    const result = await requestService.listRequests({ status, type, search, scope, page: Number(page) || 1, limit: Math.min(Number(limit) || 20, 100) });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
 };
@@ -49,7 +50,7 @@ exports.myRequests = async (req, res, next) => {
   try {
     const { status, type, search, page, limit } = req.query;
     const result = await requestService.listRequests({
-      status, type, search, requestedBy: req.user._id, page: parsePage(page), limit: parseLimit(limit, 20),
+      status, type, search, requestedBy: req.user._id, page: Number(page) || 1, limit: Math.min(Number(limit) || 20, 100),
     });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
@@ -60,6 +61,9 @@ exports.getById = async (req, res, next) => {
     const request = await requestService.getRequestById(req.params.id);
     const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(req.user.role);
     const ownerId = String(request.requestedBy?._id || request.requestedBy);
+    if (isAdmin && ownerId !== String(req.user._id) && request.type === 'ROOM') {
+      await roomAccess.assertCanDecideRequest(req.user, { type: 'ROOM', resourceId: request.resourceId?._id || request.resourceId });
+    }
     if (!isAdmin && ownerId !== String(req.user._id)) {
       return res.status(403).json({ success: false, message: 'You are not authorized to view this request', code: 'FORBIDDEN' });
     }

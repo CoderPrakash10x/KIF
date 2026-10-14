@@ -10,7 +10,6 @@ import { LoadingState } from '../components/common/Feedback';
 const page = loader => lazy(loader);
 const Login = page(() => import('../pages/auth/Login'));
 const Register = page(() => import('../pages/auth/Register'));
-const VerifyEmail = page(() => import('../pages/auth/VerifyEmail'));
 const ForgotPassword = page(() => import('../pages/auth/ForgotPassword'));
 const ResetPassword = page(() => import('../pages/auth/ResetPassword'));
 const StatusPage = page(() => import('../pages/errors/StatusPage'));
@@ -76,7 +75,6 @@ export default function AppRoutes() {
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/403" element={<StatusPage code={403} />} />
@@ -85,7 +83,7 @@ export default function AppRoutes() {
           {areaRoutes('admin', ADMIN_PAGES)}
           {AREAS.filter(a => a !== 'admin').map(a => areaRoutes(a, MEMBER_PAGES))}
         </Route>
-        <Route path="*" element={<StatusPage code={404} />} />
+        <Route path="*" element={<Navigate to="/404" replace />} />
       </Routes>
     </Suspense>
   );

@@ -62,7 +62,6 @@ async function checkHardwareModule(userId, session) {
     HARDWARE_TXN_STATUS.APPROVED,
     HARDWARE_TXN_STATUS.ISSUED,
     HARDWARE_TXN_STATUS.OVERDUE,
-    HARDWARE_TXN_STATUS.RETURNED, // handed back but not yet inspected by an admin
     HARDWARE_TXN_STATUS.INSPECTION,
   ];
 
@@ -161,11 +160,10 @@ async function runAutoCheck(noDuesRequestId, session) {
 
   noDues.moduleChecks = { cabin, hardware, room, requests };
   noDues.overallStatus = computeOverallStatus(noDues.moduleChecks);
-  const sentBack = noDues.status === NO_DUES_STATUS.PENDING && noDues.reviewedAt; // admin rejected: stays with the admin
   noDues.status =
     noDues.overallStatus === NO_DUES_STATUS.BLOCKED
       ? NO_DUES_STATUS.BLOCKED
-      : (sentBack ? NO_DUES_STATUS.PENDING : NO_DUES_STATUS.IN_REVIEW);
+      : NO_DUES_STATUS.IN_REVIEW;
   noDues.lastCheckedAt = new Date();
 
   await noDues.save({ session });
@@ -176,7 +174,6 @@ async function runAutoCheck(noDuesRequestId, session) {
 // INITIATE — creates a new No-Dues request (self or admin-initiated)
 // ---------------------------------------------------------------------------
 async function initiateNoDuesRequest(targetUserId, initiatedBy, actor) {
-  if (!/^[a-f\d]{24}$/i.test(String(targetUserId))) throw new ApiError(400, 'Invalid userId', 'VALIDATION_ERROR');
   const existing = await NoDuesRequest.findOne({
     userId: targetUserId,
     status: { $in: [NO_DUES_STATUS.PENDING, NO_DUES_STATUS.IN_REVIEW, NO_DUES_STATUS.BLOCKED] },
@@ -227,12 +224,6 @@ async function initiateNoDuesRequest(targetUserId, initiatedBy, actor) {
 // by other services (hardware return, cabin vacate) to auto-unblock.
 // ---------------------------------------------------------------------------
 async function recheckNoDues(noDuesRequestId, actor) {
-  if (actor?.user) { // user-initiated: owner or admin only (closes IDOR)
-    const rec = await NoDuesRequest.findById(noDuesRequestId).select('userId');
-    if (!rec) throw new ApiError(404, 'No-Dues request not found', 'NOT_FOUND');
-    const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(actor.user.role);
-    if (!isAdmin && String(rec.userId) !== String(actor.user._id)) throw new ApiError(403, 'Not authorized for this No-Dues request', 'FORBIDDEN');
-  }
   const noDues = await withTransaction((session) => runAutoCheck(noDuesRequestId, session));
 
   if (actor?.user) {
@@ -301,13 +292,6 @@ async function adminReviewNoDues(noDuesRequestId, adminUser, decision, remarks, 
       );
     }
 
-    if (decision === 'APPROVE') {
-      // Re-verify at sign-off: liabilities may have appeared since the last auto-check.
-      const [cabin, hardware] = await Promise.all([checkCabinModule(record.userId, session), checkHardwareModule(record.userId, session)]);
-      if (cabin.status === MODULE_CHECK_STATUS.BLOCKED || hardware.status === MODULE_CHECK_STATUS.BLOCKED) {
-        throw new ApiError(409, 'Pending liabilities found at sign-off. Re-check the request first.', 'LIABILITIES_PENDING');
-      }
-    }
     const snapshot = record.toObject();
 
     if (decision === 'APPROVE') {
@@ -347,7 +331,7 @@ async function adminReviewNoDues(noDuesRequestId, adminUser, decision, remarks, 
       userId: noDues.userId,
       type: NOTIFICATION_TYPE.NO_DUES_CLEARED,
       title: 'No-Dues Cleared ✅',
-      message: 'Your No-Dues clearance has been approved. You can download your certificate from the No-dues page.',
+      message: 'Your No-Dues clearance has been approved. Certificate has been generated and emailed to you.',
       relatedResourceType: 'NoDuesRequest', relatedResourceId: noDues._id,
     });
   } else {

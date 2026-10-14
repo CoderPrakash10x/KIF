@@ -40,7 +40,7 @@ async function onApprove({ request, adminUser, session }) {
       cabinId: cabin._id,
       startupName: request.metadata?.startupName,
       founderId: request.requestedBy,
-      members: [],
+      members: request.metadata?.members || [],
       startDate: request.startDate,
       endDate: request.endDate,
       purpose: request.purpose,
@@ -59,8 +59,8 @@ async function onApprove({ request, adminUser, session }) {
 }
 
 async function onReject({ request, session }) {
-  await Cabin.updateOne(
-    { _id: request.resourceId, status: CABIN_STATUS.REQUESTED },
+  await Cabin.findByIdAndUpdate(
+    request.resourceId,
     { status: CABIN_STATUS.FREE, currentAllotment: null },
     { session }
   );
@@ -87,15 +87,9 @@ async function onCancel({ request, actorUser, session }) {
     );
   }
 
-  // Only release the cabin if it is still tied to THIS request (it may have been reassigned since).
-  const ownsCabin = request.linkedTransactionId
-    ? String(cabin.currentAllotment) === String(request.linkedTransactionId)
-    : cabin.status === CABIN_STATUS.REQUESTED;
-  if (ownsCabin) {
-    cabin.status = CABIN_STATUS.FREE;
-    cabin.currentAllotment = null;
-    await cabin.save({ session });
-  }
+  cabin.status = CABIN_STATUS.FREE;
+  cabin.currentAllotment = null;
+  await cabin.save({ session });
 
   return {
     postCommit: () => {

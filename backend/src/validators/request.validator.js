@@ -12,12 +12,7 @@ const createRequestSchema = z
     startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
     endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
     purpose: z.string().min(3).max(1000),
-    metadata: z.object({
-      quantity: z.number().int().min(1).max(1000).optional(),
-      startupName: z.string().trim().max(150).optional(),
-      attendees: z.number().int().min(1).max(500).optional(),
-      equipment: z.array(z.string().max(100)).max(30).optional(),
-    }).strip().optional(),
+    metadata: z.record(z.any()).optional(),
   })
   .refine(
     (data) => {
@@ -26,9 +21,7 @@ const createRequestSchema = z
       return true;
     },
     { message: 'Missing required date/time fields for the selected request type' }
-  )
-  .refine((d) => !(d.startDate && d.endDate) || d.endDate > d.startDate, { message: 'endDate must be after startDate', path: ['endDate'] })
-  .refine((d) => !(d.startTime && d.endTime) || d.endTime > d.startTime, { message: 'endTime must be after startTime', path: ['endTime'] });
+  );
 
 const reviewRequestSchema = z.object({
   remarks: z.string().max(1000).optional(),

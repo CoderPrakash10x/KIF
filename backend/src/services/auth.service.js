@@ -1,97 +1,127 @@
 const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 const env = require('../config/env');
+const emailOtp = require('./emailOtp.service');
+const { accountGate } = require('../utils/accountGate');
+const { rollKey } = require('../utils/registrationRules');
 const ApiError = require('../utils/ApiError');
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 const { sendEmail, verificationEmailTemplate, passwordResetEmailTemplate } = require('../utils/email');
 const auditService = require('./audit.service');
-const { USER_STATUS } = require('../constants/enums');
+const { USER_STATUS, APPROVAL_STATUS, NOTIFICATION_TYPE } = require('../constants/enums');
+const notificationService = require('./notification.service');
 
 // ---------------------------------------------------------------------------
 // REGISTER
 // ---------------------------------------------------------------------------
-async function register(payload) {
-  const { name, email, password, role, contact, department, startupName } = payload;
+const GENERIC_REGISTER_MESSAGE = 'If the details are valid, a verification code has been sent to the email address provided.';
 
-  const existing = await User.findOne({ email });
-  if (existing) throw new ApiError(409, 'An account with this email already exists', 'EMAIL_EXISTS');
+const otpPayload = (email, issued) => ({
+  email,
+  expiresInMinutes: Math.round(emailOtp.config.expiryMs / 60000),
+  resendAfterSeconds: issued && issued.retryAfterSec ? issued.retryAfterSec : Math.round(emailOtp.config.cooldownMs / 1000),
+});
 
-  const user = new User({
-    name, email, role, contact, department, startupName,
-    status: USER_STATUS.PENDING_VERIFICATION,
+// Step 1-4 of the registration flow: validate, store the (hashed-password) registration, e-mail an OTP.
+// Responses are generic so the endpoint does not reveal whether an address already has an account.
+async function register(payload, meta = {}) {
+  const v = payload; // already validated + normalised by registrationSchema
+  const key = rollKey(v.rollNumber);
+  const existing = await User.findOne({ email: v.email }).select('+passwordHash');
+
+  const rollClash = await User.findOne({
+    college: v.college, rollNumberKey: key, ...(existing ? { _id: { $ne: existing._id } } : {}),
+  }).select('_id');
+  if (rollClash) {
+    throw new ApiError(409, 'This roll number is already registered for the selected college.', 'ROLL_NUMBER_EXISTS');
+  }
+
+  // An account that is already verified/decided is never touched by a new registration attempt.
+  if (existing && (existing.emailVerified || existing.approvalStatus === 'APPROVED' || existing.approvalStatus === 'REJECTED')) {
+    await auditService.log({
+      action: 'DUPLICATE_REGISTRATION_ATTEMPT', performedBy: existing._id, role: existing.role, module: 'AUTH',
+      resourceType: 'User', resourceId: existing._id, ipAddress: meta.ip, userAgent: meta.userAgent,
+    });
+    return { message: GENERIC_REGISTER_MESSAGE, data: otpPayload(v.email) };
+  }
+
+  let user = existing;
+  try {
+    if (!user) user = new User({ email: v.email, status: USER_STATUS.PENDING_VERIFICATION, emailVerified: false, approvalStatus: APPROVAL_STATUS.PENDING });
+    // Latest unverified submission wins; ownership is proven by the OTP delivered to the address.
+    Object.assign(user, {
+      name: v.name, role: v.role, college: v.college, department: v.department, branch: v.branch, rollNumber: v.rollNumber,
+      rollNumberKey: key, purpose: v.purpose, contact: v.contact, startupName: v.startupName,
+    });
+    if (!user.approvalStatus) user.approvalStatus = APPROVAL_STATUS.PENDING;
+    user.password = v.password; // bcrypt-hashed by the pre-save hook; never stored in plaintext
+    await user.save();
+  } catch (err) {
+    if (err && err.code === 11000) {
+      const field = Object.keys(err.keyPattern || {});
+      if (field.includes('rollNumberKey')) throw new ApiError(409, 'This roll number is already registered for the selected college.', 'ROLL_NUMBER_EXISTS');
+      return { message: GENERIC_REGISTER_MESSAGE, data: otpPayload(v.email) }; // lost an e-mail race: stay generic
+    }
+    throw err;
+  }
+
+  const issued = await emailOtp.issue({ userKey: String(user._id), email: user.email, name: user.name });
+  await auditService.log({
+    action: 'USER_REGISTERED', performedBy: user._id, role: user.role, module: 'AUTH', resourceType: 'User', resourceId: user._id,
+    newValue: { email: user.email, role: user.role, college: user.college, department: user.department, branch: user.branch },
+    ipAddress: meta.ip, userAgent: meta.userAgent,
   });
-  user.password = password; // triggers bcrypt hash via pre('save') hook
+  return { message: GENERIC_REGISTER_MESSAGE, data: otpPayload(user.email, issued) };
+}
 
-  const rawToken = user.generateEmailVerificationToken();
-  await user.save();
+// Step 5-7: verify the OTP. Verification only proves e-mail ownership; the account stays PENDING_APPROVAL.
+async function verifyOtp({ email, otp }, meta = {}) {
+  const user = await User.findOne({ email });
+  const reject = () => new ApiError(400, 'The verification code is invalid or has expired.', 'INVALID_OTP');
+  if (!user || user.emailVerified || user.approvalStatus === APPROVAL_STATUS.REJECTED) throw reject();
 
-  const verifyUrl = `${env.FRONTEND_URL.split(',')[0].trim()}/verify-email?token=${rawToken}`;
-  sendEmail({ // fire-and-forget: SMTP latency/outage must not block or fail sign-up (resend endpoint exists)
-    to: user.email,
-    subject: 'Verify your KIF-RMS account',
-    html: verificationEmailTemplate(user.name, verifyUrl),
-  });
+  await emailOtp.verify({ userKey: String(user._id), otp }); // throws INVALID_OTP / OTP_EXPIRED / OTP_ATTEMPTS_EXCEEDED
+
+  const updated = await User.findOneAndUpdate(
+    { _id: user._id, emailVerified: false },
+    { $set: { emailVerified: true, emailVerifiedAt: new Date(), status: USER_STATUS.PENDING_APPROVAL, approvalStatus: APPROVAL_STATUS.PENDING },
+      $unset: { emailVerificationToken: '', emailVerificationExpires: '' } },
+    { new: true },
+  );
+  if (!updated) throw reject();
 
   await auditService.log({
-    action: 'USER_REGISTERED', performedBy: user._id, role: user.role,
-    module: 'AUTH', resourceType: 'User', resourceId: user._id,
-    newValue: { email: user.email, role: user.role },
+    action: 'EMAIL_VERIFIED', performedBy: user._id, role: user.role, module: 'AUTH', resourceType: 'User', resourceId: user._id,
+    ipAddress: meta.ip, userAgent: meta.userAgent,
   });
-
-  return { message: 'Registration successful. Please check your email to verify your account.' };
+  await notificationService.notifySuperAdmins({
+    type: NOTIFICATION_TYPE.GENERAL, title: 'New registration awaiting approval',
+    message: `${updated.name} (${updated.college}, roll ${updated.rollNumber}) verified their email and is waiting for approval.`,
+    relatedResourceType: 'User', relatedResourceId: updated._id,
+  });
+  return { message: 'Email verified successfully. Your account is awaiting Super Admin approval.', data: { status: updated.status, approvalStatus: updated.approvalStatus } };
 }
 
-// ---------------------------------------------------------------------------
-// EMAIL VERIFICATION
-// ---------------------------------------------------------------------------
-async function verifyEmail(rawToken) {
-  if (typeof rawToken !== 'string' || rawToken.length < 10 || rawToken.length > 200) {
-    throw new ApiError(400, 'Invalid or expired verification link', 'INVALID_TOKEN');
-  }
-  const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-
-  // The hashed token is kept after use so a repeat click (mail scanners, double tabs) is idempotent.
-  const user = await User.findOne({ emailVerificationToken: hashedToken })
-    .select('+emailVerificationToken +emailVerificationExpires');
-  if (!user) throw new ApiError(400, 'Invalid or expired verification link', 'INVALID_TOKEN');
-  if (user.emailVerified) return { message: 'Email already verified. You can log in.' };
-  if (!user.emailVerificationExpires || user.emailVerificationExpires < Date.now()) {
-    throw new ApiError(400, 'Invalid or expired verification link', 'INVALID_TOKEN');
-  }
-
-  user.emailVerified = true;
-  if (user.status === USER_STATUS.PENDING_VERIFICATION) user.status = USER_STATUS.ACTIVE;
-  await user.save();
-  return { message: 'Email verified successfully. You can now log in.' };
-}
-
-async function resendVerification(email) {
-  const generic = { message: 'If that account exists and is unverified, a new verification link has been sent.' };
+async function resendOtp({ email }) {
   const user = await User.findOne({ email });
-  if (!user || user.emailVerified || user.status === USER_STATUS.DEACTIVATED) return generic;
-  const rawToken = user.generateEmailVerificationToken();
-  await user.save();
-  sendEmail({
-    to: user.email, subject: 'Verify your KIF-RMS account',
-    html: verificationEmailTemplate(user.name, `${env.FRONTEND_URL.split(',')[0].trim()}/verify-email?token=${rawToken}`),
-  });
-  return generic;
+  let issued = null;
+  if (user && !user.emailVerified && user.approvalStatus !== APPROVAL_STATUS.REJECTED) {
+    issued = await emailOtp.issue({ userKey: String(user._id), email: user.email, name: user.name });
+  }
+  return { message: GENERIC_REGISTER_MESSAGE, data: otpPayload(email, issued) };
 }
 
-// ---------------------------------------------------------------------------
-// LOGIN — with account lockout + refresh token issuance
-// ---------------------------------------------------------------------------
-// Constant-ish work for unknown emails so response time doesn't reveal account existence.
-const DUMMY_HASH = '$2b$12$C6UzMDM.H6dfI/f/IKcEeO5G3x0Bf6o0m1S6x3bq0nQ8bqP8D1cRa';
+// The old e-mail-link flow activated accounts without approval. It is retired.
+async function verifyEmail() {
+  throw new ApiError(410, 'Email links are no longer used. Verify with the 6-digit code instead.', 'VERIFICATION_LINK_RETIRED');
+}
 
 async function login({ email, password }, meta = {}) {
-  const user = await User.findOne({ email }).select('+passwordHash +failedLoginAttempts +lockUntil +refreshTokens');
+  const user = await User.findOne({ email }).select(
+    '+passwordHash +failedLoginAttempts +lockUntil'
+  );
 
-  if (!user) {
-    await require('bcrypt').compare(password, DUMMY_HASH).catch(() => {});
-    throw new ApiError(401, 'Invalid email or password', 'INVALID_CREDENTIALS');
-  }
+  if (!user) throw new ApiError(401, 'Invalid email or password', 'INVALID_CREDENTIALS');
 
   if (user.isLocked) {
     const minutesLeft = Math.ceil((user.lockUntil - Date.now()) / 60000);
@@ -101,33 +131,33 @@ async function login({ email, password }, meta = {}) {
   const isMatch = await user.comparePassword(password);
 
   if (!isMatch) {
-    // Atomic increment: parallel guesses cannot race past the counter.
-    const updated = await User.findOneAndUpdate({ _id: user._id }, { $inc: { failedLoginAttempts: 1 } }, { new: true }).select('+failedLoginAttempts');
-    if (updated.failedLoginAttempts >= env.MAX_LOGIN_ATTEMPTS) {
-      await User.updateOne({ _id: user._id }, { $set: { lockUntil: new Date(Date.now() + env.LOCK_TIME_MS), failedLoginAttempts: 0 } });
+    user.failedLoginAttempts += 1;
+    if (user.failedLoginAttempts >= env.MAX_LOGIN_ATTEMPTS) {
+      user.lockUntil = new Date(Date.now() + env.LOCK_TIME_MS);
+      user.failedLoginAttempts = 0; // reset counter once locked
     }
+    await user.save();
     throw new ApiError(401, 'Invalid email or password', 'INVALID_CREDENTIALS');
   }
 
-  // Account-state details are only revealed to someone who proved they know the password.
-  if (user.status === USER_STATUS.DEACTIVATED) {
-    throw new ApiError(403, 'This account has been deactivated. Contact admin.', 'ACCOUNT_DEACTIVATED');
-  }
-  if (!user.emailVerified) {
-    throw new ApiError(403, 'Please verify your email before logging in.', 'EMAIL_NOT_VERIFIED');
-  }
+  // Password is correct: now (and only now) tell the owner why the account cannot be used yet.
+  const blocked = accountGate(user);
+  if (blocked) throw new ApiError(blocked.http, blocked.message, blocked.code);
 
+  // Successful login — reset lockout counters
   user.failedLoginAttempts = 0;
   user.lockUntil = undefined;
   user.lastLogin = new Date();
 
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
-  user.pruneRefreshTokens();
+
   user.addRefreshToken(refreshToken, {
-    deviceInfo: meta.userAgent?.slice(0, 200), ipAddress: meta.ip,
+    deviceInfo: meta.userAgent,
+    ipAddress: meta.ip,
     expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_EXPIRY_MS),
   });
+
   await user.save();
 
   await auditService.log({
@@ -146,58 +176,52 @@ async function refreshAccessToken(rawRefreshToken, meta = {}) {
   if (!rawRefreshToken) throw new ApiError(401, 'Refresh token missing', 'NO_REFRESH_TOKEN');
 
   let decoded;
-  try { decoded = verifyRefreshToken(rawRefreshToken); } catch (err) {
+  try {
+    decoded = verifyRefreshToken(rawRefreshToken);
+  } catch (err) {
     throw new ApiError(401, 'Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN');
   }
 
   const user = await User.findById(decoded.sub).select('+refreshTokens');
   if (!user) throw new ApiError(401, 'User not found', 'INVALID_REFRESH_TOKEN');
-  if (user.status === USER_STATUS.DEACTIVATED || !user.emailVerified) {
-    throw new ApiError(401, 'Session is no longer valid', 'INVALID_REFRESH_TOKEN');
-  }
+
+  const blocked = accountGate(user);
+  if (blocked) throw new ApiError(blocked.http === 401 ? 401 : 403, blocked.message, blocked.code);
 
   const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
   const storedToken = user.refreshTokens.find((t) => t.tokenHash === tokenHash);
 
   if (!storedToken) {
-    // Unknown token: replay/theft. Revoke every session.
+    // Token not found in store — either already rotated/used, or a replay/theft attempt.
+    // Security measure: invalidate ALL sessions for this user as a precaution.
     user.refreshTokens = [];
     await user.save();
     throw new ApiError(401, 'Refresh token reuse detected. All sessions have been logged out.', 'TOKEN_REUSE_DETECTED');
   }
 
-  // A token rotated moments ago is a benign race (two tabs reloading together), not theft:
-  // hand out a fresh pair but keep every other session intact.
-  const withinGrace = storedToken.rotatedAt && Date.now() - storedToken.rotatedAt <= User.ROTATION_GRACE_MS;
-  if (storedToken.rotatedAt && !withinGrace) {
-    user.refreshTokens = [];
-    await user.save();
-    throw new ApiError(401, 'Refresh token reuse detected. All sessions have been logged out.', 'TOKEN_REUSE_DETECTED');
-  }
-
-  if (!storedToken.rotatedAt) user.markRefreshTokenRotated(rawRefreshToken);
+  // Rotation: remove old, issue new
+  user.removeRefreshToken(rawRefreshToken);
   const newRefreshToken = generateRefreshToken(user);
   user.addRefreshToken(newRefreshToken, {
-    deviceInfo: meta.userAgent?.slice(0, 200), ipAddress: meta.ip,
+    deviceInfo: meta.userAgent,
+    ipAddress: meta.ip,
     expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_EXPIRY_MS),
   });
-  user.pruneRefreshTokens();
   await user.save();
 
-  return { user, accessToken: generateAccessToken(user), refreshToken: newRefreshToken };
+  const newAccessToken = generateAccessToken(user);
+
+  return { user, accessToken: newAccessToken, refreshToken: newRefreshToken };
 }
 
 // ---------------------------------------------------------------------------
 // LOGOUT (single device) / LOGOUT ALL
 // ---------------------------------------------------------------------------
-// Works with an expired access token: the refresh cookie itself identifies the session to revoke.
-async function logout(rawRefreshToken) {
-  if (!rawRefreshToken) return;
-  let decoded;
-  try { decoded = jwt.verify(rawRefreshToken, env.JWT_REFRESH_SECRET, { ignoreExpiration: true }); } catch { return; }
-  const user = await User.findById(decoded.sub).select('+refreshTokens');
+async function logout(userId, rawRefreshToken) {
+  const user = await User.findById(userId).select('+refreshTokens');
   if (!user) return;
-  user.removeRefreshToken(rawRefreshToken);
+
+  if (rawRefreshToken) user.removeRefreshToken(rawRefreshToken);
   await user.save();
 }
 
@@ -225,8 +249,8 @@ async function forgotPassword(email) {
   const rawToken = user.generatePasswordResetToken();
   await user.save();
 
-  const resetUrl = `${env.FRONTEND_URL.split(',')[0].trim()}/reset-password?token=${rawToken}`;
-  sendEmail({
+  const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+  await sendEmail({
     to: user.email,
     subject: 'Reset your KIF-RMS password',
     html: passwordResetEmailTemplate(user.name, resetUrl),
@@ -241,7 +265,7 @@ async function resetPassword(rawToken, newPassword) {
   const user = await User.findOne({
     passwordResetToken: hashedToken,
     passwordResetExpires: { $gt: Date.now() },
-  }).select('+passwordResetToken +passwordResetExpires +refreshTokens +failedLoginAttempts +lockUntil');
+  }).select('+passwordResetToken +passwordResetExpires +refreshTokens');
 
   if (!user) throw new ApiError(400, 'Invalid or expired reset link', 'INVALID_TOKEN');
 
@@ -249,8 +273,6 @@ async function resetPassword(rawToken, newPassword) {
   user.passwordResetToken = undefined;
   user.passwordResetExpires = undefined;
   user.refreshTokens = []; // security: force logout of all existing sessions on password reset
-  user.failedLoginAttempts = 0;
-  user.lockUntil = undefined;
   await user.save();
 
   await auditService.log({
@@ -261,7 +283,7 @@ async function resetPassword(rawToken, newPassword) {
   return { message: 'Password reset successful. Please log in with your new password.' };
 }
 
-async function changePassword(userId, currentPassword, newPassword, meta = {}) {
+async function changePassword(userId, currentPassword, newPassword) {
   const user = await User.findById(userId).select('+passwordHash +refreshTokens');
   if (!user) throw new ApiError(404, 'User not found', 'NOT_FOUND');
 
@@ -269,13 +291,7 @@ async function changePassword(userId, currentPassword, newPassword, meta = {}) {
   if (!isMatch) throw new ApiError(400, 'Current password is incorrect', 'INVALID_CREDENTIALS');
 
   user.password = newPassword;
-  // End every other session, but keep this device signed in (the UI promises exactly that).
-  const refreshToken = generateRefreshToken(user);
-  user.refreshTokens = [];
-  user.addRefreshToken(refreshToken, {
-    deviceInfo: meta.userAgent?.slice(0, 200), ipAddress: meta.ip,
-    expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_EXPIRY_MS),
-  });
+  user.refreshTokens = []; // force re-login everywhere after password change
   await user.save();
 
   await auditService.log({
@@ -283,10 +299,10 @@ async function changePassword(userId, currentPassword, newPassword, meta = {}) {
     module: 'AUTH', resourceType: 'User', resourceId: user._id,
   });
 
-  return { message: 'Password changed. Other devices have been signed out.', refreshToken };
+  return { message: 'Password changed successfully. Please log in again.' };
 }
 
 module.exports = {
-  register, verifyEmail, resendVerification, login, refreshAccessToken,
+  register, verifyOtp, resendOtp, verifyEmail, login, refreshAccessToken,
   logout, logoutAllDevices, forgotPassword, resetPassword, changePassword,
 };

@@ -10,7 +10,6 @@ import { EmptyState } from '../../components/common/Feedback';
 import { EventRows, RequestRows, ViewAll } from '../../components/common/Widgets';
 import Badge from '../../components/ui/Badge';
 import { Card, StatCard, StatGrid } from '../../components/ui/Card';
-import { todayISO } from '../../utils/time';
 import { fmtDate, fmtShortDate, fmtTimeRange, timeAgo } from '../../utils/format';
 
 const SUB = {
@@ -32,7 +31,7 @@ export default function MemberDashboard() {
   const s = summary.data?.data;
   const held = (hw.data?.data || []).filter(t => ['ISSUED', 'OVERDUE', 'APPROVED'].includes(t.status));
   const activeCabins = (cabins.data?.data || []).filter(a => ['ACTIVE', 'APPROVED', 'RESERVED'].includes(a.status));
-  const today = todayISO();
+  const today = new Date().toISOString().slice(0, 10);
   const upcoming = (bookings.data?.data || []).filter(b => (b.date || '').slice(0, 10) >= today);
   const first = user.name.split(' ')[0];
 

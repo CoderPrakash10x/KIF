@@ -15,4 +15,5 @@ module.exports = {
   AuditLog: require('./AuditLog'),
   NoDuesRequest: require('./NoDuesRequest'),
   Counter: require('./Counter'),
+  EmailOtp: require('./EmailOtp'),
 };

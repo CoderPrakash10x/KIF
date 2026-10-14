@@ -13,7 +13,6 @@ const consumableSchema = new mongoose.Schema(
     currentQuantity: { type: Number, required: true, min: 0, default: 0 },
     lowStockThreshold: { type: Number, required: true, min: 0, default: 5 },
 
-    supplier: { type: String, trim: true, maxlength: 150 },
     location: { type: String, trim: true },
     description: { type: String, trim: true },
 

@@ -7,7 +7,7 @@ import { api, toUserMessage } from '../../lib/api';
 import { useApi, useServerList } from '../../hooks/useApi';
 import useDebounce from '../../hooks/useDebounce';
 import PageHeader from '../../components/common/PageHeader';
-import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/Feedback';
+import { EmptyState, ErrorState } from '../../components/common/Feedback';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { StatCard, StatGrid } from '../../components/ui/Card';
@@ -82,7 +82,7 @@ export default function AuditPage() {
             <div><dt>Resource</dt><dd className="mono">{selected.resourceType} {selected.resourceId}</dd></div>
             <div><dt>IP address</dt><dd className="mono">{selected.ipAddress || '—'}</dd></div>
           </dl>
-          {detail.loading && !d ? <ListSkeleton rows={3} /> : d && (d.oldValue || d.newValue) && (
+          {detail.loading && !d ? <p className="muted">Loading details…</p> : d && (d.oldValue || d.newValue) && (
             <>
               {d.oldValue && <><h3 className="subhead">Before</h3><pre className="code-block">{JSON.stringify(d.oldValue, null, 2)}</pre></>}
               {d.newValue && <><h3 className="subhead">After</h3><pre className="code-block">{JSON.stringify(d.newValue, null, 2)}</pre></>}

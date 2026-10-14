@@ -1,3 +1,4 @@
+const roomAccess = require('./roomAccess.service');
 const {
   User, Cabin, Hardware, HardwareTransaction, Request, Consumable, RoomBooking, Room, Notification,
 } = require('../models');
@@ -59,24 +60,26 @@ async function roomUtilization(days = 7) {
   return pct(minutes, rooms * days * OPEN_MINUTES_PER_DAY);
 }
 
-async function adminSummary() {
+async function adminSummary(user) {
+  const scope = await roomAccess.requestScope(user); // ADMIN: room requests only for rooms they manage
   const [users, cabins, requests, hardware, consumables, roomUtil, counterActions] = await Promise.all([
     User.aggregate([{ $group: { _id: { role: '$role', status: '$status' }, count: { $sum: 1 } } }]),
     Cabin.aggregate([{ $match: { active: true } }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
-    Request.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+    Request.aggregate([...(scope ? [{ $match: scope }] : []), { $group: { _id: '$status', count: { $sum: 1 } } }]),
     hardwareSummary(),
     consumableSummary(),
     roomUtilization(7),
     HardwareTransaction.countDocuments({ status: { $in: [HARDWARE_TXN_STATUS.APPROVED, HARDWARE_TXN_STATUS.RETURNED] } }),
   ]);
 
-  const byRole = {}; let total = 0; let active = 0; let deactivated = 0; let pending = 0;
+  const byRole = {}; let total = 0; let active = 0; let deactivated = 0; let pending = 0; let unverified = 0;
   for (const u of users) {
     byRole[u._id.role] = (byRole[u._id.role] || 0) + u.count;
     total += u.count;
     if (u._id.status === USER_STATUS.ACTIVE) active += u.count;
     if (u._id.status === USER_STATUS.DEACTIVATED) deactivated += u.count;
-    if (u._id.status === USER_STATUS.PENDING_VERIFICATION) pending += u.count;
+    if (u._id.status === USER_STATUS.PENDING_APPROVAL) pending += u.count; // verified, awaiting Super Admin approval
+    if (u._id.status === USER_STATUS.PENDING_VERIFICATION) unverified += u.count;
   }
   const cabinCounts = countBy(cabins);
   const cabinTotal = Object.values(cabinCounts).reduce((a, b) => a + b, 0);
@@ -86,7 +89,7 @@ async function adminSummary() {
 
   return {
     scope: 'admin',
-    users: { total, active, deactivated, pending, byRole },
+    users: { total, active, deactivated, pending, unverified, byRole },
     cabins: { total: cabinTotal, byStatus: cabinCounts, inUse, utilization: pct(inUse, usable) },
     hardware,
     consumables,
@@ -124,7 +127,7 @@ async function memberSummary(user) {
 }
 
 async function getSummary(user) {
-  return [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role) ? adminSummary() : memberSummary(user);
+  return [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role) ? adminSummary(user) : memberSummary(user);
 }
 
 module.exports = { getSummary, hardwareSummary, consumableSummary, roomUtilization };

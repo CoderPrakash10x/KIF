@@ -1,8 +1,8 @@
-const { Request } = require('../models');
-const { escapeRegex } = require('../utils/regex');
+const { Request, Room } = require('../models');
 const { REQUEST_STATUS, ROLES, NOTIFICATION_TYPE } = require('../constants/enums');
 const requestHandlers = require('./requestHandlers');
 const { withTransaction } = require('../utils/db');
+const roomAccess = require('./roomAccess.service');
 const ApiError = require('../utils/ApiError');
 const auditService = require('./audit.service');
 const notificationService = require('./notification.service');
@@ -21,9 +21,6 @@ async function createRequest(payload, actor) {
   const { user, ip, userAgent } = actor;
 
   const handler = getHandler(type);
-
-  const pendingCount = await Request.countDocuments({ requestedBy: user._id, status: REQUEST_STATUS.PENDING });
-  if (pendingCount >= 15) throw new ApiError(429, 'You have too many pending requests. Wait for a decision or cancel some.', 'TOO_MANY_PENDING');
 
   const request = await withTransaction(async (session) => {
     // Resource-specific validation (+ possible resource locking, e.g. Cabin -> REQUESTED)
@@ -50,12 +47,20 @@ async function createRequest(payload, actor) {
     newValue: request.toObject(), ipAddress: ip, userAgent,
   });
 
-  await notificationService.notifyAdmins({
+  const notifyPayload = {
     type: NOTIFICATION_TYPE.GENERAL,
     title: 'New Resource Request',
     message: `${user.name} raised a new ${type} request (${request.requestNumber}).`,
     relatedResourceType: 'Request', relatedResourceId: request._id,
-  });
+  };
+  if (type === 'ROOM') {
+    // Only the assigned room administrator and the Super Admin hear about a room request.
+    const room = await Room.findById(request.resourceId).select('assignedAdmin');
+    await notificationService.notifySuperAdmins(notifyPayload);
+    if (room?.assignedAdmin) await notificationService.notify({ ...notifyPayload, userId: room.assignedAdmin, email: false });
+  } else {
+    await notificationService.notifyAdmins(notifyPayload);
+  }
 
   return request;
 }
@@ -66,6 +71,7 @@ async function createRequest(payload, actor) {
 async function approveRequest(requestId, adminUser, remarks, meta = {}) {
   const { request, oldValue } = await withTransaction(async (session) => {
     const req = await Request.findById(requestId).session(session);
+    if (req) await roomAccess.assertCanDecideRequest(adminUser, req, session);
     if (!req) throw new ApiError(404, 'Request not found', 'NOT_FOUND');
     if (req.status !== REQUEST_STATUS.PENDING) {
       throw new ApiError(409, `Cannot approve a request with status ${req.status}`, 'INVALID_STATE');
@@ -108,6 +114,7 @@ async function approveRequest(requestId, adminUser, remarks, meta = {}) {
 async function rejectRequest(requestId, adminUser, remarks, meta = {}) {
   const { request, oldValue } = await withTransaction(async (session) => {
     const req = await Request.findById(requestId).session(session);
+    if (req) await roomAccess.assertCanDecideRequest(adminUser, req, session);
     if (!req) throw new ApiError(404, 'Request not found', 'NOT_FOUND');
     if (req.status !== REQUEST_STATUS.PENDING) {
       throw new ApiError(409, `Cannot reject a request with status ${req.status}`, 'INVALID_STATE');
@@ -156,11 +163,9 @@ async function cancelRequest(requestId, actorUser, meta = {}) {
     const isOwner = String(req.requestedBy) === String(actorUser._id);
     const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(actorUser.role);
     if (!isOwner && !isAdmin) throw new ApiError(403, 'Not authorized to cancel this request', 'FORBIDDEN');
+    if (!isOwner) await roomAccess.assertCanDecideRequest(actorUser, req, session); // admin cancelling someone else's room request
 
-    // Owners may only withdraw a PENDING request (matches the UI); admins can also cancel approved/active ones.
-    const cancellable = isAdmin
-      ? [REQUEST_STATUS.PENDING, REQUEST_STATUS.APPROVED, REQUEST_STATUS.ACTIVE]
-      : [REQUEST_STATUS.PENDING];
+    const cancellable = [REQUEST_STATUS.PENDING, REQUEST_STATUS.APPROVED, REQUEST_STATUS.ACTIVE];
     if (!cancellable.includes(req.status)) {
       throw new ApiError(409, `Cannot cancel a request with status ${req.status}`, 'INVALID_STATE');
     }
@@ -195,10 +200,11 @@ async function cancelRequest(requestId, actorUser, meta = {}) {
 // ---------------------------------------------------------------------------
 // READ
 // ---------------------------------------------------------------------------
-async function listRequests({ status, type, requestedBy, search, page = 1, limit = 20 }) {
+async function listRequests({ status, type, requestedBy, search, scope, page = 1, limit = 20 }) {
   const query = {};
+  if (scope) query.$and = [scope]; // room-admin visibility (see roomAccess.service)
   if (search) {
-    const rx = new RegExp(escapeRegex(search), 'i');
+    const rx = new RegExp(String(search).slice(0, 60).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     query.$or = [{ requestNumber: rx }, { purpose: rx }];
   }
   if (status) query.status = status;

@@ -1,7 +1,7 @@
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const cloudinary = require('../config/cloudinary');
 const { User } = require('../models');
-const { sendEmail, escapeHtml } = require('../utils/email');
+const { sendEmail } = require('../utils/email');
 
 const NAVY = rgb(0.06, 0.09, 0.16);   // #0F172A
 const BLUE = rgb(0.15, 0.39, 0.92);   // #2563EB
@@ -12,10 +12,6 @@ const MUTED = rgb(0.4, 0.45, 0.55);
 // SHARED BASE — builds the visual certificate shell. Callers pass in the
 // title/body text; this function owns fonts, layout, colors, and upload.
 // ---------------------------------------------------------------------------
-// StandardFonts only encode WinAnsi; anything else (Devanagari, emoji) used to throw and fail the whole certificate.
-// Replace unencodable glyphs so a certificate is still produced. Follow-up: embed a Unicode TTF via @pdf-lib/fontkit.
-const winAnsiSafe = (t) => String(t ?? '').replace(/[^\x20-\x7E\xA0-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026\u20AC]/g, '?');
-
 async function buildCertificatePdf({ headerText, subHeaderText, bodyLines, footerLeft, footerRight, folder, publicId }) {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([842, 595]); // A4 landscape
@@ -26,18 +22,18 @@ async function buildCertificatePdf({ headerText, subHeaderText, bodyLines, foote
   page.drawRectangle({ x: 20, y: 20, width: 802, height: 555, borderColor: BLUE, borderWidth: 3 });
 
   page.drawText('KIPM INNOVATION FOUNDATION', { x: 240, y: 500, size: 22, font: boldFont, color: NAVY });
-  page.drawText(winAnsiSafe(headerText), { x: 220, y: 460, size: 18, font: boldFont, color: BLUE });
+  page.drawText(headerText, { x: 220, y: 460, size: 18, font: boldFont, color: BLUE });
   if (subHeaderText) {
-    page.drawText(winAnsiSafe(subHeaderText), { x: 260, y: 435, size: 12, font: regularFont, color: NAVY });
+    page.drawText(subHeaderText, { x: 260, y: 435, size: 12, font: regularFont, color: NAVY });
   }
 
   let y = 400;
   for (const line of bodyLines) {
-    page.drawText(winAnsiSafe(line.text), { x: line.x || 220, y, size: line.size || 12, font: line.bold ? boldFont : regularFont, color: NAVY });
+    page.drawText(line.text, { x: line.x || 220, y, size: line.size || 12, font: line.bold ? boldFont : regularFont, color: NAVY });
     y -= line.gap || 25;
   }
 
-  page.drawText(winAnsiSafe(footerLeft), { x: 40, y: 45, size: 9, font: regularFont, color: MUTED });
+  page.drawText(footerLeft, { x: 40, y: 45, size: 9, font: regularFont, color: MUTED });
   page.drawText(footerRight, { x: 550, y: 45, size: 9, font: regularFont, color: MUTED });
 
   const pdfBytes = await pdfDoc.save();
@@ -108,8 +104,8 @@ async function emailCertificate(user, subject, message, certificateUrl) {
     subject,
     html: `
       <div style="font-family: Inter, sans-serif; max-width: 480px; margin: auto;">
-        <h2 style="color:#0F172A;">${escapeHtml(subject)}</h2>
-        <p style="color:#1E293B;">${escapeHtml(message)}</p>
+        <h2 style="color:#0F172A;">${subject}</h2>
+        <p style="color:#1E293B;">${message}</p>
         <a href="${certificateUrl}" style="display:inline-block;padding:12px 24px;background:#2563EB;
            color:white;text-decoration:none;border-radius:8px;margin-top:12px;">Download Certificate</a>
       </div>`,

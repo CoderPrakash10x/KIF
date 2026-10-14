@@ -1,4 +1,3 @@
-const { parsePage, parseLimit } = require('../utils/pagination');
 const consumableService = require(
   '../services/consumable.service'
 );
@@ -90,8 +89,8 @@ exports.list = async (req, res, next) => {
           active === undefined
             ? true
             : active === 'true',
-        page: parsePage(page),
-        limit: parseLimit(limit, 20),
+        page: Number(page) || 1,
+        limit: Number(limit) || 20,
       });
 
     res.json({
@@ -205,8 +204,8 @@ exports.history = async (req, res, next) => {
           type,
           fromDate,
           toDate,
-          page: parsePage(page),
-          limit: parseLimit(limit, 20),
+          page: Number(page) || 1,
+          limit: Number(limit) || 20,
         }
       );
 

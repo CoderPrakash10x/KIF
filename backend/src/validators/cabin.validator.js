@@ -8,7 +8,7 @@ const objectId = z
   .regex(/^[a-f\d]{24}$/i, 'Invalid ObjectId');
 
 const createCabinSchema = z.object({
-  cabinNumber: z.string().trim().min(1).max(50),
+  cabinNumber: z.string().min(1).max(50),
   name: z.string().max(100).optional(),
   type: z.enum(Object.values(CABIN_TYPE)),
   capacity: z.number().int().min(1),
@@ -29,19 +29,13 @@ const directAllotmentSchema = z.object({
   startupName: z.string().max(150).optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
-  purpose: z.string().trim().max(1000).optional(),
+  purpose: z.string().min(3).max(1000),
   documentUrl: z
     .object({
-      url: z.string().url().refine((u) => /^https:\/\//i.test(u), 'Must be an https URL'),
+      url: z.string().url(),
       publicId: z.string().optional(),
     })
     .optional(),
-});
-
-const updateCabinSchema = z.object({
-  name: z.string().max(100).optional(), type: z.enum(Object.values(CABIN_TYPE)).optional(),
-  capacity: z.number().int().min(1).optional(), location: z.string().max(200).optional(),
-  facilities: z.array(z.string().max(100)).optional(),
 });
 
 const vacateSchema = z.object({
@@ -53,5 +47,4 @@ module.exports = {
   maintenanceSchema,
   directAllotmentSchema,
   vacateSchema,
-  updateCabinSchema,
 };

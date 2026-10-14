@@ -30,7 +30,7 @@ export default function AdminDashboard() {
           <>
             <StatGrid>
               {sa && <StatCard icon={Users} label="Total users" value={s.users.total} hint={`${s.users.active} active`} to="/admin/users" />}
-              {sa && <StatCard icon={UserX} tone="amber" label="Pending activation" value={s.users.pending} hint={`${s.users.deactivated} deactivated`} to="/admin/users" />}
+              {sa && <StatCard icon={UserX} tone="amber" label="Awaiting approval" value={s.users.pending} hint={`${s.users.unverified || 0} unverified · ${s.users.deactivated} deactivated`} to="/admin/users" />}
               <StatCard icon={ClipboardCheck} tone="amber" label="Pending requests" value={s.requests.pending} hint="Need a decision" to="/admin/requests" />
               <StatCard icon={Building2} label="Cabins in use" value={s.cabins.inUse} hint={`${s.cabins.total} total · ${s.cabins.byStatus.FREE || 0} free`} to="/admin/cabins" />
               <StatCard icon={Cpu} tone="purple" label="Hardware available" value={s.hardware.available} hint={`of ${s.hardware.total} units`} to="/admin/hardware" />
@@ -55,10 +55,10 @@ export default function AdminDashboard() {
                     {Object.entries(s.users.byRole).map(([role, n]) => <ProgressBar key={role} label={ROLE_LABELS[role] || role} value={pct(n, s.users.total)} detail={n} />)}
                   </div>
                 </Card>
-                <Card title="Account status" description="Self-registered accounts wait here for activation.">
+                <Card title="Account status" description="Verified registrations wait here for Super Admin approval.">
                   <div className="stack">
                     <ProgressBar label="Active" value={pct(s.users.active, s.users.total)} detail={s.users.active} />
-                    <ProgressBar label="Pending activation" value={pct(s.users.pending, s.users.total)} tone="amber" detail={s.users.pending} />
+                    <ProgressBar label="Awaiting approval" value={pct(s.users.pending, s.users.total)} tone="amber" detail={s.users.pending} />
                     <ProgressBar label="Deactivated" value={pct(s.users.deactivated, s.users.total)} tone="red" detail={s.users.deactivated} />
                   </div>
                 </Card>

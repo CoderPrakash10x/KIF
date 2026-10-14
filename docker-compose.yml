@@ -1,6 +1,5 @@
-# LOCAL DEV dependencies only:  docker compose up -d
-#  - MongoDB single-node replica set (transactions need one)  -> mongodb://localhost:27017
-#  - Mailpit: catches all outgoing e-mail (verification / reset links) -> UI http://localhost:8025
+# Local MongoDB as a single-node replica set (needed for multi-document transactions)
+# + Mailpit, a fake mail server that catches the sign-up OTP e-mails -> inbox UI at http://localhost:8025
 services:
   mongo:
     image: mongo:7

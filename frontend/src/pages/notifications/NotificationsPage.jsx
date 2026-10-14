@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck } from 'lucide-react';
-import { useAuth, useBase } from '../../context/AuthContext';
-import { isAdminRole } from '../../constants/roles';
+import { useBase } from '../../context/AuthContext';
 import { useUnread } from '../../context/UnreadContext';
 import { api } from '../../lib/api';
 import { useServerList } from '../../hooks/useApi';
@@ -16,14 +15,10 @@ import Pagination from '../../components/tables/Pagination';
 import { Modal } from '../../components/modals/Modal';
 import { fmtDateTime, timeAgo, titleCase } from '../../utils/format';
 
-const ADMIN_LINKS = { Request: '/requests', HardwareTransaction: '/hardware', Hardware: '/hardware', Cabin: '/cabins', CabinAllotment: '/cabins', RoomBooking: '/rooms', Event: '/events', Consumable: '/consumables', NoDuesRequest: '/no-dues' };
-// Members have no cabin/hardware/room admin pages; point them at the nearest page they do have.
-const MEMBER_LINKS = { Request: '/requests', HardwareTransaction: '/requests', Hardware: '/requests', Cabin: '/requests', CabinAllotment: '/dashboard', RoomBooking: '/bookings', Event: '/events', EventRegistration: '/events', NoDuesRequest: '/no-dues' };
+const LINKS = { Request: '/requests', HardwareTransaction: '/hardware', Hardware: '/hardware', Cabin: '/cabins', CabinAllotment: '/cabins', RoomBooking: '/rooms', Event: '/events', Consumable: '/consumables', NoDuesRequest: '/no-dues' };
 
 export default function NotificationsPage() {
   const base = useBase();
-  const { user } = useAuth();
-  const LINKS = isAdminRole(user.role) ? ADMIN_LINKS : MEMBER_LINKS;
   const navigate = useNavigate();
   const unread = useUnread();
   const rowAction = useRowAction();

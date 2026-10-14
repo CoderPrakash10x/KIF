@@ -1,5 +1,3 @@
-const ApiError = require('../utils/ApiError');
-const { parsePage, parseLimit } = require('../utils/pagination');
 const { parse } = require('csv-parse/sync');
 const hardwareService = require('../services/hardware.service');
 
@@ -35,7 +33,7 @@ exports.list = async (req, res, next) => {
   try {
     const { category, search, page, limit } = req.query;
     const result = await hardwareService.listHardware({
-      category, search, page: parsePage(page), limit: parseLimit(limit, 20),
+      category, search, page: Number(page) || 1, limit: Number(limit) || 20,
     });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
@@ -52,10 +50,9 @@ exports.getById = async (req, res, next) => {
 // Assumes `upload.js` middleware (multer, memoryStorage) populates req.file.buffer
 exports.bulkImport = async (req, res, next) => {
   try {
-    if (!req.file) throw new ApiError(400, 'CSV file is required', 'VALIDATION_ERROR');
+    if (!req.file) throw { statusCode: 400, message: 'CSV file is required', code: 'VALIDATION_ERROR' };
 
     const rows = parse(req.file.buffer.toString('utf-8'), {
-      bom: true, // Excel 'CSV UTF-8' prefixes a BOM that corrupts the first header
       columns: true,
       skip_empty_lines: true,
       trim: true,
@@ -111,7 +108,7 @@ exports.transactionHistory = async (req, res, next) => {
   try {
     const { page, limit } = req.query;
     const result = await hardwareService.getTransactionHistory(req.params.id, {
-      page: parsePage(page), limit: parseLimit(limit, 20),
+      page: Number(page) || 1, limit: Number(limit) || 20,
     });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
@@ -121,7 +118,7 @@ exports.myTransactions = async (req, res, next) => {
   try {
     const { status, page, limit } = req.query;
     const result = await hardwareService.listMyTransactions(req.user._id, {
-      status, page: parsePage(page), limit: parseLimit(limit, 20),
+      status, page: Number(page) || 1, limit: Number(limit) || 20,
     });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
@@ -131,7 +128,7 @@ exports.pendingCounterActions = async (req, res, next) => {
   try {
     const { page, limit } = req.query;
     const result = await hardwareService.listPendingCounterActions({
-      page: parsePage(page), limit: parseLimit(limit, 20),
+      page: Number(page) || 1, limit: Number(limit) || 20,
     });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }

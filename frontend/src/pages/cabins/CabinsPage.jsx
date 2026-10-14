@@ -10,7 +10,7 @@ import useQueryParam from '../../hooks/useQueryParam';
 import useRowAction from '../../hooks/useRowAction';
 import useSubmit from '../../hooks/useSubmit';
 import PageHeader from '../../components/common/PageHeader';
-import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/Feedback';
+import { EmptyState, ErrorState } from '../../components/common/Feedback';
 import Button, { IconButton } from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Dropdown from '../../components/ui/Dropdown';
@@ -121,7 +121,7 @@ function DetailModal({ cabin, onClose }) {
         </dl>
       ) : <p className="muted">{cabin.maintenanceReason || 'No current allotment.'}</p>}
       <h3 className="subhead">Allotment history</h3>
-      {hist.loading ? <ListSkeleton rows={3} /> : (hist.data?.data || []).length ? (
+      {hist.loading ? <p className="muted">Loading…</p> : (hist.data?.data || []).length ? (
         <ul className="rows">{hist.data.data.map(h => (
           <li key={h._id} className="row"><div className="row__main"><p className="row__title">{h.startupName || h.founderId?.name || 'Allotment'}</p><p className="row__sub">{fmtDate(h.startDate)} – {fmtDate(h.endDate)}</p></div><Badge status={h.status} /></li>
         ))}</ul>

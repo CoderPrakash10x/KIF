@@ -1,6 +1,6 @@
 const { User } = require('../models');
 const { verifyAccessToken } = require('../utils/jwt');
-const { USER_STATUS } = require('../constants/enums');
+const { accountGate } = require('../utils/accountGate');
 const ApiError = require('../utils/ApiError');
 
 async function authenticate(req, res, next) {
@@ -21,9 +21,8 @@ async function authenticate(req, res, next) {
     const user = await User.findById(decoded.sub);
     if (!user) throw new ApiError(401, 'User no longer exists', 'UNAUTHENTICATED');
 
-    if (user.status === USER_STATUS.DEACTIVATED) {
-      throw new ApiError(403, 'Your account has been deactivated', 'ACCOUNT_DEACTIVATED');
-    }
+    const blocked = accountGate(user); // verified + approved + not deactivated/rejected, on every request
+    if (blocked) throw new ApiError(blocked.http, blocked.message, blocked.code);
 
     req.user = user;
     next();

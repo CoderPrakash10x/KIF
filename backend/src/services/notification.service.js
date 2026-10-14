@@ -5,7 +5,15 @@ const { sendEmail } = require('../utils/email');
 
 const MAX_EMAIL_ATTEMPTS = 3;
 
-const { genericNotificationTemplate } = require('../utils/email');
+function genericNotificationTemplate(name, title, message) {
+  return `
+    <div style="font-family: Inter, sans-serif; max-width: 480px; margin: auto;">
+      <h2 style="color:#0F172A;">${title}</h2>
+      <p style="color:#1E293B;">Hi ${name},</p>
+      <p style="color:#1E293B;">${message}</p>
+      <p style="color:#64748B;font-size:12px;margin-top:24px;">— KIF Resource Management System</p>
+    </div>`;
+}
 
 // Best-effort email delivery. Never throws: email problems must not break business flows.
 async function deliverEmail(notificationId) {
@@ -63,6 +71,17 @@ async function notifyAdmins({ type, title, message, relatedResourceType, related
   }
 }
 
+async function notifySuperAdmins({ type, title, message, relatedResourceType, relatedResourceId }) {
+  try {
+    const admins = await User.find({ role: ROLES.SUPER_ADMIN, status: USER_STATUS.ACTIVE }).select('_id');
+    if (!admins.length) return [];
+    return await Notification.insertMany(admins.map((a) => ({ userId: a._id, type, title, message, relatedResourceType, relatedResourceId, emailSent: true })));
+  } catch (err) {
+    console.error('NOTIFY_SUPER_ADMINS_FAILURE:', err.message);
+    return [];
+  }
+}
+
 async function retryEmailDelivery(notificationId) {
   return deliverEmail(notificationId);
 }
@@ -106,6 +125,7 @@ module.exports = {
   genericNotificationTemplate,
   notify,
   notifyAdmins,
+  notifySuperAdmins,
   retryEmailDelivery,
   listForUser,
   unreadCount,

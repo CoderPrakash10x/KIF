@@ -3,8 +3,6 @@ const controller = require('../controllers/room.controller');
 const { authenticate } = require('../middleware/auth');
 const { authorize } = require('../middleware/role');
 const { ROLES } = require('../constants/enums');
-const { validate } = require('../middleware/validation');
-const { directBookingSchema, blockSchema } = require('../validators/room.validator');
 
 const adminOnly = authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN);
 
@@ -13,9 +11,12 @@ router.use(authenticate);
 // Catalog — read for all, write for admin
 router.get('/', controller.listRooms);
 router.get('/:id', controller.getRoomById);
-router.post('/', adminOnly, controller.createRoom);
+const superAdminOnly = authorize(ROLES.SUPER_ADMIN);
+router.post('/', superAdminOnly, controller.createRoom);
 router.patch('/:id', adminOnly, controller.updateRoom);
-router.delete('/:id', adminOnly, controller.deactivateRoom);
+router.delete('/:id', superAdminOnly, controller.deactivateRoom);
+// Room-administrator assignment: Super Admin only (service re-checks). Granting it confers no global privileges.
+router.put('/:id/admin', superAdminOnly, controller.assignAdmin);
 
 // Availability / calendar
 router.get('/:id/availability', controller.getAvailability);
@@ -25,8 +26,8 @@ router.get('/bookings/all', adminOnly, controller.listBookings);
 router.get('/bookings/my', controller.myBookings);
 router.get('/bookings/:id', controller.getBookingById);
 
-router.post('/bookings/direct', adminOnly, validate(directBookingSchema), controller.createDirectBooking);
-router.post('/bookings/block-maintenance', adminOnly, validate(blockSchema), controller.blockMaintenance);
+router.post('/bookings/direct', adminOnly, controller.createDirectBooking);
+router.post('/bookings/block-maintenance', adminOnly, controller.blockMaintenance);
 router.post('/bookings/:id/unblock-maintenance', adminOnly, controller.unblockMaintenance);
 
 router.post('/bookings/:id/activate', adminOnly, controller.activateBooking);

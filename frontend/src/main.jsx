@@ -1,7 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import RootBoundary from './components/common/RootBoundary';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/components.css';
@@ -14,8 +13,6 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <RootBoundary>
-      <App />
-    </RootBoundary>
+    <App />
   </StrictMode>,
 );

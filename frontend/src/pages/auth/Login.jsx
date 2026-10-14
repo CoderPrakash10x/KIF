@@ -4,7 +4,6 @@ import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { homePath } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Splash } from '../../components/common/Feedback';
 import Button from '../../components/ui/Button';
 import { Field } from '../../components/forms/Form';
 import { toUserMessage } from '../../lib/api';
@@ -25,7 +24,7 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
 
   if (isAuthenticated && !busy) return <Navigate to={homePath(user.role)} replace />;
-  if (booting) return <Splash label="Loading" />;
+  if (booting) return null;
 
   const submit = async e => {
     e.preventDefault();

@@ -36,5 +36,6 @@ const cabinSchema = new mongoose.Schema(
 );
 
 cabinSchema.index({ status: 1 });
+cabinSchema.index({ cabinNumber: 1 }, { unique: true });
 
 module.exports = mongoose.model('Cabin', cabinSchema);
