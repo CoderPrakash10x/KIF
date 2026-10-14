@@ -1,0 +1,68 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/CoderPrakash10x/KIF-RMS#readme",
+  "bugs": {
+    "url": "https://github.com/CoderPrakash10x/KIF-RMS/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CoderPrakash10x/KIF-RMS.git"
+  },
+  "license": "ISC",
+  "author": "prakash",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed": "node scripts/seed.js",
+    "seed:demo": "node scripts/seed.js --demo",
+    "test": "jest --runInBand",
+    "lint": "eslint src scripts tests --max-warnings 50",
+    "secrets": "node scripts/gen-secrets.js"
+  },
+  "dependencies": {
+    "@exortek/express-mongo-sanitize": "^1.0.0",
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^2.5.1",
+    "compression": "^1.8.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "csv-parse": "^7.0.2",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.10.2",
+    "multer": "^2.4.0",
+    "node-cron": "^4.6.0",
+    "nodemailer": "^10.0.10",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
+    "jest": "^30.5.1",
+    "mongodb-memory-server": "^11.2.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/tests/setup.js"
+    ],
+    "testMatch": [
+      "<rootDir>/tests/**/*.test.js"
+    ],
+    "forceExit": true
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

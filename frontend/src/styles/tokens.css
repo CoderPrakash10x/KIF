@@ -1,0 +1,58 @@
+/* Design tokens: change a value here and the whole app follows. */
+:root {
+  --bg: #f4f7f8;
+  --surface: #ffffff;
+  --surface-soft: #f8fafb;
+  --line: #e2e8eb;
+  --line-strong: #cdd6db;
+
+  --ink: #13222c;
+  --ink-2: #2d414e;
+  --muted: #5a6c78;
+  --faint: #8797a2;
+
+  --primary: #0b8374;
+  --primary-strong: #096b5f;
+  --primary-soft: #e2f4f1;
+  --primary-ink: #075c51;
+
+  --blue: #2f6bd8;
+  --blue-soft: #e8f0fd;
+  --blue-ink: #2150a8;
+  --purple: #7a4fd0;
+  --purple-soft: #f0eafb;
+  --purple-ink: #5d37ad;
+  --green: #1f9a5c;
+  --green-soft: #e3f6ec;
+  --green-ink: #166f42;
+  --amber: #d9890b;
+  --amber-soft: #fdf1d6;
+  --amber-ink: #8a5600;
+  --red: #d13c3c;
+  --red-soft: #fcebea;
+  --red-ink: #a62a2a;
+  --gray: #7b8b96;
+  --gray-soft: #eef1f3;
+  --gray-ink: #4b5c68;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(19, 34, 44, 0.06);
+  --shadow-md: 0 10px 30px rgba(19, 34, 44, 0.14);
+
+  --sidebar-width: 252px;
+  --sidebar-collapsed: 68px;
+  --topbar-height: 60px;
+
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --fs-body: 14.5px;
+  --fs-small: 13px;
+  --fs-tiny: 12px;
+  --fs-badge: 12px;
+  --fs-title: 26px;
+  --fs-section: 17px;
+  --fs-kpi: 28px;
+}

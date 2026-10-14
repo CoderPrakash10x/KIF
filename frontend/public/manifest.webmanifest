@@ -1,0 +1,13 @@
+{
+  "name": "KIF-RMS — KIF Resource Management System",
+  "short_name": "KIF-RMS",
+  "description": "Cabins, hardware, rooms, events and requests for KIPM Innovation Foundation",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f8",
+  "theme_color": "#0b8374",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

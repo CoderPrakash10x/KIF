@@ -1,0 +1,18 @@
+module.exports = {
+  User: require('./User'),
+  Cabin: require('./Cabin'),
+  CabinAllotment: require('./CabinAllotment'),
+  Hardware: require('./Hardware'),
+  HardwareTransaction: require('./HardwareTransaction'),
+  Room: require('./Room'),
+  RoomBooking: require('./RoomBooking'),
+  Event: require('./Event'),
+  EventRegistration: require('./EventRegistration'),
+  Request: require('./Request'),
+  Consumable: require('./Consumable'),
+  StockTransaction: require('./StockTransaction'),
+  Notification: require('./Notification'),
+  AuditLog: require('./AuditLog'),
+  NoDuesRequest: require('./NoDuesRequest'),
+  Counter: require('./Counter'),
+};

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="KIF-RMS — resource and space management for KIPM Innovation Foundation" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0b8374" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>KIF-RMS — KIPM Innovation Foundation</title>
+  </head>
+  <body>
+    <div id="root">
+      <style>
+        .boot{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#f4f7f8;font-family:Inter,system-ui,sans-serif;opacity:0;animation:bf .3s ease .15s forwards}
+        .boot b{display:grid;place-items:center;width:52px;height:52px;border-radius:13px;background:#0b8374;color:#fff;font-size:26px;font-weight:800;box-shadow:0 8px 22px rgba(11,131,116,.35);animation:bl 2.2s ease-in-out infinite}
+        .boot p{margin:0;font-weight:700;letter-spacing:.08em;font-size:15px;color:#096b5f}
+        .boot div{width:150px;height:3px;border-radius:3px;background:rgba(11,131,116,.15);overflow:hidden}
+        .boot i{display:block;width:40%;height:100%;border-radius:3px;background:linear-gradient(90deg,#0b8374,#7fe3d3);animation:bs 1.25s cubic-bezier(.45,.05,.35,1) infinite}
+        @keyframes bf{to{opacity:1}}@keyframes bl{50%{transform:translateY(-4px)}}@keyframes bs{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
+        @media (prefers-reduced-motion:reduce){.boot,.boot b,.boot i{animation:none;opacity:1}}
+      </style>
+      <div class="boot" role="status" aria-label="Loading KIF-RMS"><b>K</b><p>KIF-RMS</p><div><i></i></div></div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
